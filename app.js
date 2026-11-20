@@ -177,7 +177,7 @@ function cenOf(P){let a=0,x=0,y=0;for(let i=0;i<P.length;i++){const[x0,y0]=P[i],
 const torsoC=l=>({x:(l[11].x+l[12].x+l[23].x+l[24].x)/4,y:(l[11].y+l[12].y+l[23].y+l[24].y)/4});
 // The lasso and the subject circle are FIXED in video space. They never follow the person and never move on playback or scrubbing:
 // they only change when you draw a new lasso or drag the centre handle yourself.
-function lassoNow(){if(!lasso)return null;const dx=camCum.x,dy=camCum.y;if(!dx&&!dy)return lasso;return{...lasso,pts:lasso.pts.map(([x,y])=>[x+dx,y+dy]),c:{x:lasso.c.x+dx,y:lasso.c.y+dy},bb:{x0:lasso.bb.x0+dx,x1:lasso.bb.x1+dx,y0:lasso.bb.y0+dy,y1:lasso.bb.y1+dy}}}
+function lassoNow(){return lasso||null}
 function maskPoly(ref){const L=lassoNow(ref);if(!L)return null;const f=1+(+$('fpad').value||35)/100;return L.pts.map(([x,y])=>[L.c.x+(x-L.c.x)*f,L.c.y+(y-L.c.y)*f])}
 function finishLasso(){let P=lp;lp=[];$('lasso').classList.remove('on');O.style.cursor='';lastT=-1;
  if(P.length>90)P=P.filter((_,i)=>i%Math.ceil(P.length/90)===0);
@@ -327,7 +327,7 @@ function suspects(){buildBR();const th=Math.max(.08,tolV()*1.7),out=[];
  frames.forEach((f,i)=>{if(!f.lm){out.push([i,'missing']);return}const r=[],fl=f.flag||'';
   if(/jump/.test(fl))r.push('jump');if(/low confidence/.test(fl))r.push('low confidence');if(/disputed/.test(fl))r.push('passes disagree');
   if(devOf(i,f.lm)>th)r.push('off-trend');if(stretch(f.lm)>1.4)r.push('stretched limb');if(r.length)out.push([i,r.join(', ')])});return out}
-async function recheck(i,why){const f=frames[i];await seek(start+i/fps);const c0=ccOf(i);camCum={x:c0[0],y:c0[1]};
+async function recheck(i,why){const f=frames[i];await seek(start+i/fps);const c0=ccOf(i);
  const nb=[i-1,i+1].filter(j=>frames[j]?.lm).map(j=>{const cj=ccOf(j);return shiftLM(frames[j].lm,c0[0]-cj[0],c0[1]-cj[1])});let ref=null;
  if(nb.length===2)ref=nb[0].map((p,k)=>({x:(p.x+nb[1][k].x)/2,y:(p.y+nb[1][k].y)/2,v:Math.min(p.v,nb[1][k].v)}));else if(nb.length===1)ref=nb[0];else if(f.lm)ref=f.lm;
  const dw=engine()==='dw',im=dw?null:await getLM('IMAGE'),cs=[],mask=lasso&&$('lmask').checked?maskPoly(ref):null,tol=tolV(),q=dw?null:roiFor(ref),qw=dw?null:roiFor(ref,1.8);
