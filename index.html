@@ -1,8 +1,7 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>vid2anim · Video to animation</title><meta name="theme-color" content="#191c32"><link rel="icon" type="image/png" href="favicon.png"><link rel="icon" href="favicon.ico" sizes="any"><link rel="apple-touch-icon" href="apple-touch-icon.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Sora:wght@400;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css"></head><body data-mode="human">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>vid2anim · Video to animation</title><meta name="theme-color" content="#191c32"><link rel="icon" type="image/png" href="favicon.png"><link rel="icon" href="favicon.ico" sizes="any"><link rel="apple-touch-icon" href="apple-touch-icon.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Sora:wght@400;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css"></head><body>
 <header>
 <div class="brand"><img src="favicon.png" alt="" width="36" height="36"><div><b>vid2anim</b><small>Video to animation</small></div></div>
 <div class="grp"><label class="btn">Upload video<input id="file" type="file" accept="video/*" hidden></label><button id="analyze" class="go">Analyze</button><button id="cancel" disabled>Cancel</button></div>
-<div class="grp seg" role="group" aria-label="Scan mode"><button id="modeH" class="on" title="Real people: pose detector with person lock">Human</button><button id="modeC" title="Cartoon, anime and game characters: AI segmentation + pose on the cut-out">Character</button></div>
 <div class="stat"><span id="status">Loading model…</span><progress id="prog" value="0" max="1"></progress><small class="r">Processed locally in your browser. Nothing is uploaded.</small></div>
 </header>
 <main>
@@ -10,17 +9,13 @@
 <nav id="tabs" aria-label="Sidebar sections"><button data-tab="scan" class="on">Scan</button><button data-tab="subj">Subject</button><button data-tab="clean">Clean-up</button><button data-tab="out">Export</button></nav>
 
 <div class="tab" data-tab="scan">
-<details open class="c-only"><summary>Character recognition (AI)</summary>
-<small>Cuts the character out on every frame (SlimSAM), follows it by shape and colour, then reads the pose from only that cut-out. About 50 MB of models download once, then stay cached.</small>
-<label><input id="cmask" type="checkbox" checked> Isolate the character for the pose model (hides background and other characters)</label>
-<label>Search area around the character<select id="cfr"><option value="tight">Tight (steady shots, fastest)</option><option value="norm" selected>Normal</option><option value="wide">Wide (fast action, camera moves)</option></select></label></details>
 <details open><summary>Tracking quality</summary>
 <label><input id="smart" type="checkbox" checked> Smart tracking (retry, cross-check passes, L/R swap fix)</label>
 <label>Thoroughness<select id="thr"><option value="fast">Fast: one pass, retry only if lost</option><option value="care" selected>Careful: every frame measured twice + verify sweep</option><option value="max">Exhaustive: 5+ passes, mirror &amp; zoom, 2 verify sweeps</option></select></label>
 <label>Agreement tolerance % of body<input id="dtol" type="number" step=".5" min="1" max="30" value="6"></label>
 <small>Careful and Exhaustive are several times slower on purpose. Two independent passes must agree; if they don't, tie-breaker passes run, then suspicious frames are re-measured after the sweep.</small>
 <label><input id="held" type="checkbox"> Reuse repeated frames (animation drawn on twos / threes)</label></details>
-<details open class="h-only"><summary>Human tracker engine</summary>
+<details open><summary>Human tracker engine</summary>
 <label>Model<select id="mdl"><option value="lite">Lite (fast)</option><option value="full">Full</option><option value="heavy" selected>Heavy (most accurate)</option></select></label>
 <label>Tracker engine<select id="eng"><option value="dw" selected>DWPose / RTMW: 133-point whole-body (advanced)</option><option value="mp">MediaPipe Pose (legacy, 33 points)</option></select></label>
 <label>Person detector (advanced engine)<select id="ddet"><option value="yolox" selected>YOLOX-L (217 MB download, best)</option><option value="none">None: follow pose + lasso only</option></select></label>
@@ -38,10 +33,9 @@
 
 <div class="tab" data-tab="subj" hidden>
 <details open><summary>Who to track</summary>
-<small class="h-only">Use <b>Pick subject</b> above the video on the first frame: everyone found is numbered, click one. Their clothing colours are memorised and tracking stays on them even when people overlap. Drag the circle to nudge it. With no pick, the largest, clearest person is used.</small>
-<small class="c-only">Use <b>Pick character</b> above the video on the first frame, then click the character. Click more spots to add, Shift+click to remove, and use Larger / Smaller to change how much is included (just the outfit, the whole body, or the group).</small>
-<label class="h-only"><input id="lock" type="checkbox" checked> Identity lock (clothing colour + motion + size keep the chosen person when others stand close)</label></details>
-<details open class="h-only"><summary>Focus lasso</summary>
+<small>Use <b>Pick subject</b> above the video on the first frame: everyone found is numbered, click one. Their clothing colours are memorised and tracking stays on them even when people overlap. Drag the circle to nudge it. With no pick, the largest, clearest person is used.</small>
+<label><input id="lock" type="checkbox" checked> Identity lock (clothing colour + motion + size keep the chosen person when others stand close)</label></details>
+<details open><summary>Focus lasso</summary>
 <label><input id="lmask" type="checkbox"> Ignore everything outside the lasso</label>
 <label>Focus padding %<input id="fpad" type="number" min="0" max="200" value="35"></label>
 <small>Go to the first frame, press Lasso above the video, then drag a loop around the spot to track. Tracking zooms in around the lasso center and prefers the person inside it. The lasso and the subject circle stay put until you drag their center handle somewhere else.</small></details>
@@ -88,8 +82,7 @@
 </aside>
 <section id="mid">
 <div class="row ctl vtools"><b>Subject</b><button id="pick" class="go">Pick subject</button><button id="pclear">Clear</button>
-<button id="csmall" class="c-only" title="Smaller mask (just the outfit)">Smaller</button><button id="cbig" class="c-only" title="Larger mask (whole body or group)">Larger</button>
-<button id="lasso" class="h-only">Lasso</button><button id="lclear" class="h-only">Clear lasso</button></div>
+<button id="lasso">Lasso</button><button id="lclear">Clear lasso</button></div>
 <div id="wrapv"><div id="stage"><video id="v" playsinline muted></video><canvas id="ov"></canvas></div><div id="pvw" hidden><canvas id="pv" width="480" height="270"></canvas></div></div>
 <div class="row ctl"><button id="back">◀|</button><button id="play">Play</button><button id="fwd">|▶</button>
 <select id="spd"><option>0.25</option><option>0.5</option><option>0.75</option><option selected>1</option><option>1.5</option><option>2</option></select>
@@ -110,4 +103,4 @@
 <label><input id="rawc" type="checkbox" checked> Raw</label><small id="gmsg">Wheel/＋－ zoom · drag pan · click seek · drag ◇ keyframes to edit · hover for values</small></div>
 <div id="gw"><canvas id="graph"></canvas></div></footer>
 <div id="ag" hidden><div class="agh"><b>All parts</b><select id="agp"></select><small>Click a part to select it · double-click to close · green diamonds = keyframes</small><button id="agpng">Save PNG</button><button id="agx">Close</button></div><div id="agg"></div></div>
-<script type="module" src="app.js?v=5"></script></body></html>
+<script type="module" src="app.js?v=6"></script></body></html>
