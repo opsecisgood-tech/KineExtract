@@ -14,7 +14,9 @@
 <label>Thoroughness<select id="thr"><option value="fast">Fast: one pass, retry only if lost</option><option value="care" selected>Careful: every frame measured twice + verify sweep</option><option value="max">Exhaustive: 5+ passes, mirror &amp; zoom, 2 verify sweeps</option></select></label>
 <label>Agreement tolerance % of body<input id="dtol" type="number" step=".5" min="1" max="30" value="6"></label>
 <small>Careful and Exhaustive are several times slower on purpose. Two independent passes must agree; if they don't, tie-breaker passes run, then suspicious frames are re-measured after the sweep.</small>
-<label><input id="held" type="checkbox"> Reuse repeated frames (animation drawn on twos / threes)</label></details>
+<label><input id="held" type="checkbox"> Reuse repeated frames (animation drawn on twos / threes)</label>
+<label><input id="cam" type="checkbox" checked> Camera-shake compensation (keeps the lock through fast, shaky camera moves)</label>
+<small>Measures how the whole picture jumps between frames, then looks for the person where they should be after that jump. The person detector runs every frame while the camera is moving fast, and the lasso follows the camera. Turn off for a tripod shot to save a little time.</small></details>
 <details open><summary>Human tracker engine</summary>
 <label>Model<select id="mdl"><option value="lite">Lite (fast)</option><option value="full">Full</option><option value="heavy" selected>Heavy (most accurate)</option></select></label>
 <label>Tracker engine<select id="eng"><option value="dw" selected>DWPose / RTMW: 133-point whole-body (advanced)</option><option value="mp">MediaPipe Pose (legacy, 33 points)</option></select></label>
@@ -43,6 +45,10 @@
 </div>
 
 <div class="tab" data-tab="clean" hidden>
+<details open><summary>Camera shake</summary>
+<select id="stab"><option value="shake" selected>Remove shake, keep slow pans</option><option value="lock">Lock to first frame (remove all camera motion)</option><option value="off">Off (positions as filmed)</option></select>
+<label>Pan vs shake cutoff (s)<input id="stabT" type="number" step=".05" min=".1" max="5" value=".6"></label>
+<small>Positions of every part, graphs, keyframes and the Alight export are corrected for camera movement, so the character stays in one spot instead of jumping with the camera. Movement slower than the cutoff is treated as a real pan and kept. Rotations and joint angles are never touched. Needs the compensation box in Scan ticked when you press Analyze.</small></details>
 <details open><summary>Smoothing</summary>
 <select id="sm"><option value="ma">Moving average</option><option value="ema" selected>Exponential (zero-lag)</option><option value="sg">Savitzky-Golay</option><option value="kal">Kalman (1D)</option><option value="none">None</option></select>
 <label>Position<input id="sP" type="range" min="0" max="3" value="1"></label><label>Rotation<input id="sR" type="range" min="0" max="3" value="1"></label><label>Joint angle<input id="sJ" type="range" min="0" max="3" value="1"></label><small>None · Low · Medium · High</small>
@@ -64,14 +70,19 @@
 <small>Builds a real Alight Motion project (.xml): one layer per body part with position, length and rotation keyframes, eased like your graphs. Time 0 = start of the clip, so drop your video under it at the same start.</small>
 <label>Canvas long side (px)<select id="amLong"><option>720</option><option selected>1080</option><option>1440</option><option>1920</option></select></label>
 <label>Background<select id="amBg"><option value="#FF0D0F24" selected>Deep navy</option><option value="#FF000000">Black</option><option value="#FFFFFFFF">White</option><option value="#FFD8D8D8">Light grey</option><option value="#00000000">Transparent</option></select></label>
+<label>Rig look<select id="amStyle"><option value="stick" selected>Stickman: white lines, thin black edge, round head</option><option value="classic">Classic: coloured bars (cyan / orange)</option></select></label>
 <label>Line thickness %<input id="amThick" type="number" min="20" max="400" value="100"></label>
+<label>Black edge thickness (px on a 1080 canvas)<input id="amEdge" type="number" min="0" max="20" step=".5" value="2"></label>
+<label>Head size %<input id="amHead" type="number" min="30" max="300" value="100"></label>
 <label>Project fps<select id="amFps"><option value="match" selected>Match analysis (30 if unsupported)</option><option>24</option><option>30</option><option>60</option></select></label>
 <label>Keyframes<select id="amDense"><option value="kf" selected>As in the graphs (editable in Alight)</option><option value="dense">Every frame (exact, large file)</option></select></label>
 <details><summary>Compatibility</summary>
 <small>The Alight XML format is community-documented, not official. Import the calibration project (button below) and set these two to whatever behaves as the layer names say.</small>
 <label>Keyframe time unit<select id="amTime"><option value="frac" selected>Fraction of layer length</option><option value="sec">Seconds from layer start</option></select></label>
 <label>Easing stored on<select id="amEase"><option value="arrive" selected>Arriving keyframe</option><option value="depart">Departing keyframe</option></select></label>
-<label><input id="amInv" type="checkbox"> Invert rotation direction</label></details>
+<label><input id="amInv" type="checkbox"> Invert rotation direction</label>
+<label>Round shape id (head)<input id="amRound" type="text" value=".ellipse" spellcheck="false" autocapitalize="off"></label>
+<label>Layer order in the file<select id="amOrder"><option value="bottom" selected>First layer = bottom</option><option value="top">First layer = top</option></select></label></details>
 <button id="amCal">Calibration project (.xml)</button>
 <div class="row"><button id="amXml" class="go">Download .xml</button><button id="amShare">Share file…</button></div>
 <small id="amMsg"></small></details>
@@ -103,4 +114,4 @@
 <label><input id="rawc" type="checkbox" checked> Raw</label><small id="gmsg">Wheel/＋－ zoom · drag pan · click seek · drag ◇ keyframes to edit · hover for values</small></div>
 <div id="gw"><canvas id="graph"></canvas></div></footer>
 <div id="ag" hidden><div class="agh"><b>All parts</b><select id="agp"></select><small>Click a part to select it · double-click to close · green diamonds = keyframes</small><button id="agpng">Save PNG</button><button id="agx">Close</button></div><div id="agg"></div></div>
-<script type="module" src="app.js?v=6"></script></body></html>
+<script type="module" src="app.js?v=7"></script></body></html>
