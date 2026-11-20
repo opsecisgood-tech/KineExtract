@@ -2,7 +2,7 @@ import {PoseLandmarker,FilesetResolver} from "https://cdn.jsdelivr.net/npm/@medi
 import {initAlight} from './alight.js?v=4';
 const $=i=>document.getElementById(i),V=$('v'),O=$('ov'),ox=O.getContext('2d'),G=$('graph'),EC=$('ezc'),ec=EC.getContext('2d'),PV=$('pv'),pc=PV.getContext('2d'),crop=document.createElement('canvas'),cx=crop.getContext('2d');
 const WASM="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm",MURL=m=>`https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_${m}/float16/1/pose_landmarker_${m}.task`;
-let fs,delegate='GPU',LMs={},tsBase=0,frames=[],EF=[],R={},RF={},S={},K={},CORR=[],undo=[],redo=[],sel='head',prop='rot',selKf=-1,stop=false,view=[0,1],fps=15,start=0,dirty=true,endAt=null,lastT=-1,meta={},curFile=null,subj=null,picking=false,hov=null,rep={},lasso=null,lp=[],lassoing=false,drawingL=false,anchor=null,vel={x:0,y:0},BR=null,seed=null,ident=null,pickC=[],pickT=-1,cseed=null,cst=null,cident=null,cpick=null,lastPx=null;
+let fs,delegate='GPU',LMs={},tsBase=0,frames=[],EF=[],R={},RF={},S={},K={},CORR=[],undo=[],redo=[],sel='head',prop='rot',selKf=-1,stop=false,view=[0,1],fps=15,start=0,dirty=true,endAt=null,lastT=-1,meta={},curFile=null,subj=null,picking=false,hov=null,rep={},lasso=null,lp=[],lassoing=false,drawingL=false,anchor=null,vel={x:0,y:0},BR=null,seed=null,ident=null,pickC=[],pickT=-1,lastPx=null;
 const C={L:'#3de8ff',R:'#ff8a4c',N:'#b4b8e0',sel:'#ffe45e',brand:'#fc01e6',ok:'#3dffa6'};
 const KP=['rot','x','y','jt','len'],PROPS={rot:'Rotation °',x:'Position X',y:'Position Y',jt:'Joint angle °',len:'Segment length',vrot:'Angular velocity °/s (read-only)',vpos:'Position velocity /s (read-only)'};
 $('prop').innerHTML=Object.entries(PROPS).map(([k,v])=>`<option value=${k}>${v}</option>`).join('');
@@ -102,7 +102,7 @@ const tolV=()=>(+$('dtol').value||6)/100;
 // ---- identity lock: keeps the chosen person when others stand close or cross in front.
 // Three cues are combined: (1) clothing colour fingerprint of torso + thighs, learned from the chosen person and refreshed only on confident frames,
 // (2) motion prediction (where the torso should be given its last speed), (3) body size. Position alone is what swaps people when they overlap.
-const CH=()=>document.body.dataset.mode==='char',lockOn=()=>!CH()&&!!$('lock')&&$('lock').checked;
+const lockOn=()=>!!$('lock')&&$('lock').checked;
 const fcv=document.createElement('canvas'),fg=fcv.getContext('2d',{willReadFrequently:true});let fKey='',fData=null;
 function frameData(){const key=V.currentTime+'|'+V.videoWidth;if(key===fKey&&fData)return fData;
  try{const w=VW(),h=VH(),k=240/w;fcv.width=240;fcv.height=Math.max(8,Math.round(h*k));fg.drawImage(V,0,0,fcv.width,fcv.height);fData=fg.getImageData(0,0,fcv.width,fcv.height);fKey=key;return fData}catch{fData=null;fKey='';return null}}
@@ -126,127 +126,12 @@ function skelDist(l,p){const W=VW(),H=VH(),s=bs(box(l)),px=p.x*W,py=p.y*H;let m=
  for(const[a,b]of CONN){if(l[a].v<.3||l[b].v<.3)continue;const ax=l[a].x*W,ay=l[a].y*H,dx=l[b].x*W-ax,dy=l[b].y*H-ay,L2=dx*dx+dy*dy,t=L2?Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/L2)):0;m=Math.min(m,Math.hypot(px-ax-t*dx,py-ay-t*dy))}
  if([11,12,24,23].every(i=>l[i].v>.3)&&inPoly(p.x,p.y,[11,12,24,23].map(i=>[l[i].x,l[i].y])))m=0;return m/s}
 const cdS=(a,b,dx,dy)=>{let z=[11,12,23,24].filter(ok);if(!z.length)z=[11,12,23,24];return z.reduce((t,i)=>t+Math.hypot((a[i].x-b[i].x-dx)*VW(),(a[i].y-b[i].y-dy)*VH()),0)/z.length};
-// ======================= CHARACTER MODE =======================
-// For cartoon / anime / game characters, where human pose detectors lose the subject or glitch.
-// 1) SlimSAM (Segment Anything, runs in the browser) cuts the character out on every frame. It is prompted with points taken from the character's
-//    mask on the previous frame, and the candidate that best matches the last shape, size and colours wins, so it follows the character
-//    (not whoever is closest) through overlaps, cuts and fast moves.
-// 2) The pose model only sees the cut-out (background and other characters are greyed out) inside the mask's box, so it cannot lock onto the wrong thing.
-// 3) Joints that land outside the character's mask are flagged. Repeated frames (animation on twos / threes) are reused instead of re-measured.
-const GWV=240,MCV=new WeakMap();
-const mNew=()=>({w:GWV,h:Math.max(8,Math.round(GWV*VH()/VW())),d:new Uint8Array(GWV*Math.max(8,Math.round(GWV*VH()/VW())))});
-function mStat(m){if(m.st)return m.st;let x0=m.w,x1=-1,y0=m.h,y1=-1,n=0,sx=0,sy=0;for(let y=0;y<m.h;y++)for(let x=0;x<m.w;x++)if(m.d[y*m.w+x]){n++;sx+=x;sy+=y;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
- return m.st=n?{n,x0:x0/m.w,x1:(x1+1)/m.w,y0:y0/m.h,y1:(y1+1)/m.h,cx:(sx/n+.5)/m.w,cy:(sy/n+.5)/m.h}:{n:0,x0:0,x1:0,y0:0,y1:0,cx:0,cy:0}}
-// keep the main blob plus any piece that is at least 10% of it (a detached hand or prop), drop specks
-function mClean(m){const{w,h,d}=m,lab=new Int32Array(w*h),sz=[0],st_=[];let nl=0;
- for(let s=0;s<w*h;s++){if(!d[s]||lab[s])continue;nl++;let c=0;st_.push(s);lab[s]=nl;while(st_.length){const q=st_.pop();c++;const x=q%w,y=(q/w)|0;
-   if(x>0&&d[q-1]&&!lab[q-1]){lab[q-1]=nl;st_.push(q-1)}if(x<w-1&&d[q+1]&&!lab[q+1]){lab[q+1]=nl;st_.push(q+1)}if(y>0&&d[q-w]&&!lab[q-w]){lab[q-w]=nl;st_.push(q-w)}if(y<h-1&&d[q+w]&&!lab[q+w]){lab[q+w]=nl;st_.push(q+w)}}sz.push(c)}
- if(nl<=1)return m;const mx=Math.max(...sz),o={w,h,d:new Uint8Array(w*h)};for(let i=0;i<w*h;i++)if(lab[i]&&sz[lab[i]]>=mx*.1)o.d[i]=1;return o}
-function mDil(m,r){const{w,h,d}=m,t=new Uint8Array(w*h),o=new Uint8Array(w*h);
- for(let y=0;y<h;y++)for(let x=0;x<w;x++){let v=0;for(let k=-r;k<=r&&!v;k++){const xx=x+k;if(xx>=0&&xx<w&&d[y*w+xx])v=1}t[y*w+x]=v}
- for(let y=0;y<h;y++)for(let x=0;x<w;x++){let v=0;for(let k=-r;k<=r&&!v;k++){const yy=y+k;if(yy>=0&&yy<h&&t[yy*w+x])v=1}o[y*w+x]=v}
- return{w,h,d:o}}
-function mIoU(a,b){let i=0,u=0;for(let k=0;k<a.d.length;k++){const x=a.d[k],y=b.d[k];if(x&&y)i++;if(x||y)u++}return u?i/u:0}
-function mShift(m,dx,dy){const{w,h,d}=m,o={w,h,d:new Uint8Array(w*h)};for(let y=0;y<h;y++){const sy=y-dy;if(sy<0||sy>=h)continue;for(let x=0;x<w;x++){const sx=x-dx;if(sx>=0&&sx<w&&d[sy*w+sx])o.d[y*w+x]=1}}return o}
-// three prompt points down the middle of the previous mask (head / body / legs): they tell SAM "the whole character", not just a clothing patch
-function mPts(m){const s=mStat(m);if(!s.n)return[];const out=[];
- for(const q of[.22,.5,.78]){const y=Math.min(m.h-1,Math.max(0,Math.round((s.y0+(s.y1-s.y0)*q)*m.h))),xs=[];for(let x=0;x<m.w;x++)if(m.d[y*m.w+x])xs.push(x);if(xs.length)out.push({x:(xs[xs.length>>1]+.5)/m.w,y:(y+.5)/m.h,l:1})}
- if(!out.length){let b=null,bd=1e9;for(let y=0;y<m.h;y++)for(let x=0;x<m.w;x++)if(m.d[y*m.w+x]){const d=Math.hypot((x+.5)/m.w-s.cx,(y+.5)/m.h-s.cy);if(d<bd){bd=d;b={x:(x+.5)/m.w,y:(y+.5)/m.h,l:1}}}if(b)out.push(b)}
- return out}
-// colour fingerprint of a whole character: upper half and lower half of its mask (reuses the t / l slots so simSig() works on it)
-function mSig(m,im){if(!im)return null;const s=mStat(m);if(s.n<30)return null;const split=(s.y0+(s.y1-s.y0)*.5)*m.h,H2=[new Float32Array(28),new Float32Array(28)],cn=[0,0];
- for(let y=0;y<m.h;y++){const iy=Math.min(im.height-1,y);for(let x=0;x<m.w;x++){if(!m.d[y*m.w+x])continue;const o=4*(iy*im.width+Math.min(im.width-1,x)),q=y<split?0:1;H2[q][colBin(im.data[o],im.data[o+1],im.data[o+2])]++;cn[q]++}}
- const t=smoothH(H2[0],cn[0]),l=smoothH(H2[1],cn[1]);return t||l?{t,l}:null}
-function packM(m){const b=new Uint8Array((m.d.length+7)>>3);for(let i=0;i<m.d.length;i++)if(m.d[i])b[i>>3]|=1<<(i&7);return{w:m.w,h:m.h,b}}
-function unpackM(c){const m=mNew();if(!c||c.w!==m.w||c.h!==m.h)return null;for(let i=0;i<m.d.length;i++)m.d[i]=(c.b[i>>3]>>(i&7))&1;return m}
-const stateFrom=f=>{const m=unpackM(f?.cm);if(!m)return null;const s=mStat(m);return{mask:m,bb:{x0:s.x0,y0:s.y0,x1:s.x1,y1:s.y1},c:{x:s.cx,y:s.cy},vel:{x:0,y:0}}};
-// greyed-out "everything that is not the character" layer, drawn over the crop that the pose model sees
-const icv=document.createElement('canvas'),ig=icv.getContext('2d');
-function maskInv(m,r){const d=mDil(m,r),w=m.w,h=m.h;icv.width=w;icv.height=h;const id=ig.createImageData(w,h);for(let i=0;i<w*h;i++)if(!d.d[i]){id.data[4*i]=128;id.data[4*i+1]=128;id.data[4*i+2]=128;id.data[4*i+3]=255}ig.putImageData(id,0,0);return icv}
-const maskDil=(m,r)=>mDil(m,r);
-const inMask=(m,x,y)=>{const gx=Math.floor(x*m.w),gy=Math.floor(y*m.h);return gx>=0&&gy>=0&&gx<m.w&&gy<m.h&&m.d[gy*m.w+gx]===1};
-function drawMaskOv(m,w,h){let cv=MCV.get(m);if(!cv){cv=document.createElement('canvas');cv.width=m.w;cv.height=m.h;const g=cv.getContext('2d'),id=g.createImageData(m.w,m.h);for(let i=0;i<m.w*m.h;i++)if(m.d[i]){id.data[4*i]=252;id.data[4*i+1]=1;id.data[4*i+2]=230;id.data[4*i+3]=105}g.putImageData(id,0,0);MCV.set(m,cv)}ox.save();ox.drawImage(cv,0,0,w,h);ox.restore()}
-// held frames: animation is often drawn on twos or threes. If the character area did not change since the last measured frame, reuse that result.
+// held frames: animation is often drawn on twos or threes. If the subject area did not change since the last measured frame, reuse that result.
 function isHeld(bb){const im=frameData();if(!im)return false;const d=im.data,w=im.width,h=im.height;
  if(!lastPx||lastPx.length!==d.length){lastPx=new Uint8ClampedArray(d);return false}
  let x0=0,x1=w,y0=0,y1=h;if(bb){x0=Math.max(0,Math.floor((bb.x0-.04)*w));x1=Math.min(w,Math.ceil((bb.x1+.04)*w));y0=Math.max(0,Math.floor((bb.y0-.04)*h));y1=Math.min(h,Math.ceil((bb.y1+.04)*h))}
  let s=0,c=0,big=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){const o=4*(y*w+x),df=Math.abs(d[o]-lastPx[o])+Math.abs(d[o+1]-lastPx[o+1])+Math.abs(d[o+2]-lastPx[o+2]);s+=df;c++;if(df>60)big++}
  const held=c>0&&s/c/3<1.2&&big/c<.006;if(!held)lastPx=new Uint8ClampedArray(d);return held}
-// ---- SlimSAM through transformers.js (WebGPU, falls back to WASM). Models download once and are cached by the browser.
-let TJ=null,samM=null,samP=null,samEP='';
-const f16=h=>{const s=h&0x8000?-1:1,e=(h>>10)&0x1f,f=h&0x3ff;return e===0?s*Math.pow(2,-14)*(f/1024):e===31?(f?NaN:s*Infinity):s*Math.pow(2,e-15)*(1+f/1024)};
-async function ensureSAM(){if(samM)return;if(!TJ){TJ=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.3');TJ.env.allowLocalModels=false}
- const id='Xenova/slimsam-77-uniform';let err=null;
- for(const o of[{device:'webgpu',dtype:'fp16'},{device:'wasm',dtype:'q8'},{device:'wasm'}]){try{
-   samM=await TJ.SamModel.from_pretrained(id,{...o,progress_callback:q=>{if(q.status==='progress'&&q.total){st(`Downloading character model: ${(q.loaded/1e6).toFixed(0)} / ${(q.total/1e6).toFixed(0)} MB (first run only)`);$('prog').value=q.loaded/q.total}}});
-   samP=await TJ.AutoProcessor.from_pretrained(id);samEP=o.device;return}catch(e){err=e;samM=null;samP=null;console.warn('SAM load',o,e)}}
- throw err||new Error('could not load the character model')}
-const scv=document.createElement('canvas'),sg=scv.getContext('2d',{willReadFrequently:true});
-// encode the current video frame (or a crop of it, roi in 0..1 frame coordinates)
-async function samEmbed(roi){const W=VW(),H=VH(),cw=(roi.x1-roi.x0)*W,ch=(roi.y1-roi.y0)*H,k=Math.min(1,1024/Math.max(cw,ch));scv.width=Math.max(32,Math.round(cw*k));scv.height=Math.max(32,Math.round(ch*k));
- sg.drawImage(V,roi.x0*W,roi.y0*H,cw,ch,0,0,scv.width,scv.height);const d=sg.getImageData(0,0,scv.width,scv.height).data,n=scv.width*scv.height,rgb=new Uint8ClampedArray(n*3);
- for(let i=0;i<n;i++){rgb[3*i]=d[4*i];rgb[3*i+1]=d[4*i+1];rgb[3*i+2]=d[4*i+2]}
- const pi=await samP(new TJ.RawImage(rgb,scv.width,scv.height,3));return{pi,emb:await samM.get_image_embeddings(pi),roi}}
-// prompt with points (frame coords, l=1 inside / 0 outside). Returns the 3 candidate masks SAM proposes, each as a frame-grid mask.
-async function samDecode(E,pts){const{roi}=E,rs=E.pi.reshaped_input_sizes[0],rw=roi.x1-roi.x0,rh=roi.y1-roi.y0,P=pts.filter(q=>q.x>=roi.x0&&q.x<=roi.x1&&q.y>=roi.y0&&q.y<=roi.y1);if(!P.length)return[];
- const pf=new Float32Array(P.length*2),lb=new BigInt64Array(P.length);P.forEach((q,i)=>{pf[2*i]=(q.x-roi.x0)/rw*rs[1];pf[2*i+1]=(q.y-roi.y0)/rh*rs[0];lb[i]=BigInt(q.l===0?0:1)});
- const out=await samM({...E.emb,input_points:new TJ.Tensor('float32',pf,[1,1,P.length,2]),input_labels:new TJ.Tensor('int64',lb,[1,1,P.length])});
- const masks=await samP.post_process_masks(out.pred_masks,E.pi.original_sizes,E.pi.reshaped_input_sizes),mt=masks[0],dm=mt.dims,mw=dm[dm.length-1],mh=dm[dm.length-2],K=dm[dm.length-3];
- let sc=out.iou_scores.data;if(out.iou_scores.type==='float16')sc=Array.from(sc,f16);
- const res=[];for(let k=0;k<K;k++){const m=mNew();for(let gy=0;gy<m.h;gy++){const v=(gy+.5)/m.h;if(v<roi.y0||v>=roi.y1)continue;const my=Math.min(mh-1,Math.floor((v-roi.y0)/rh*mh));
-   for(let gx=0;gx<m.w;gx++){const u=(gx+.5)/m.w;if(u<roi.x0||u>=roi.x1)continue;const mx=Math.min(mw-1,Math.floor((u-roi.x0)/rw*mw));if(mt.data[k*mh*mw+my*mw+mx])m.d[gy*m.w+gx]=1}}
-  res.push({m:mClean(m),score:+sc[k]||0})}
- return res}
-// follow the character from the previous frame: crop around it, prompt SAM from the old mask, keep the candidate that matches shape, size and colours
-async function segTrack(prior,miss){const ps=mStat(prior.mask);if(!ps.n)return null;
- const zoom={tight:1.6,norm:2.1,wide:3.2}[$('cfr')?.value]||2.1,mul=miss>6?99:miss>2?zoom*1.5:zoom,cx=ps.cx+(prior.vel?.x||0)*1.2,cy=ps.cy+(prior.vel?.y||0)*1.2,hw=Math.max(.09,(ps.x1-ps.x0)*mul/2),hh=Math.max(.09,(ps.y1-ps.y0)*mul/2);
- let roi={x0:Math.max(0,cx-hw),x1:Math.min(1,cx+hw),y0:Math.max(0,cy-hh),y1:Math.min(1,cy+hh)};if(mul>50||(roi.x1-roi.x0)*(roi.y1-roi.y0)>.6)roi={x0:0,y0:0,x1:1,y1:1};
- const E=await samEmbed(roi),im=frameData(),sh=prior.vel?mShift(prior.mask,Math.round(prior.vel.x*prior.mask.w),Math.round(prior.vel.y*prior.mask.h)):null;
- const rate=c=>{const s=mStat(c.m);if(!s.n){c.v=-1e9;return}const iou=Math.max(mIoU(c.m,prior.mask),sh?mIoU(c.m,sh):0),ar=Math.abs(Math.log(s.n/ps.n)),sm=cident?simSig(mSig(c.m,im),cident):null;c.iou=iou;c.sim=sm;c.ar=ar;c.v=-((1-iou)+.6*ar+(sm===null?0:1.6*(1-sm))-.3*c.score)};
- const good=c=>c&&c.v>-1e8&&(c.iou>.25||(c.sim!==null&&c.sim>.6))&&c.ar<1.4,pick=cs=>{let b=null;for(const c of cs){rate(c);if(!b||c.v>b.v)b=c}return b};
- const pts=mPts(prior.mask);let best=pick(await samDecode(E,pts));
- if(!good(best)&&pts.length>1){const alt=pick(await samDecode(E,[pts[1]]));if(alt&&(!best||alt.v>best.v))best=alt} // retry with the single middle point
- if(!good(best))return null;const s=mStat(best.m);return{mask:best.m,bb:{x0:s.x0,y0:s.y0,x1:s.x1,y1:s.y1},score:best.score,iou:best.iou,sim:best.sim}}
-// one frame: mask -> pose on the cut-out -> agreement across passes -> joints checked against the mask
-async function measureChar(prior,lvl,ref,miss){const M=await segTrack(prior,miss);if(!M)return null;
- const bx=M.bb,pm=$('cmask').checked?maskInv(M.mask,2):null,tol=tolV(),cs=[],big=mDil(M.mask,4);
- const add=async(o,src)=>{const l=await dwPose(bx,{pm,...o});if(l)cs.push(tag(l,src))};
- await add({pad:1.2},'char');
- if(lvl==='fast'||lvl==='off'){if(!cs.length||vis(cs[0])<.4)await add({enh:true,pad:1.4},'char-enh')}
- else{await add({mirror:true,pad:1.2},'char-mirror');const g=cs.length>=2?agree(cs[0],cs[1]):NaN;
-  if(lvl==='max'||!(g<tol)){await add({enh:true,pad:1.4},'char-enh');await add({mirror:true,enh:true,pad:1.2},'char-mirror-enh');if(lvl==='max')await add({pad:1.7},'char-wide')}}
- const frac=l=>{const q=MAIN.filter(k=>l[k].v>.3);return q.length?q.filter(k=>inMask(big,l[k].x,l[k].y)).length/q.length:0};
- if(ref)for(const c of cs)deswap(c,ref);
- let use=cs.filter(c=>frac(c)>=.35);if(!use.length)use=cs;
- const F=use.length?fuse(use,tol,ref):{lm:null,n:0,tot:0},lm=F.lm;let mf=0;
- if(lm){mf=frac(lm);for(const p of lm)if(!inMask(big,p.x,p.y))p.v=Math.min(p.v,.25)}
- return{lm,n:F.n,tot:F.tot,dis:F.dis,disp:F.disp,M,cm:packM(M.mask),cb:M.bb,off:!!lm&&mf<.6}}
-async function detectChar(i,prev,miss){const lvl=$('smart').checked?$('thr').value:'off';
- if(!cst)return{lm:null,src:'char',rej:false,n:1,tot:0};
- const R=await measureChar(cst,lvl,prev,miss);if(!R)return{lm:null,src:'char',rej:true,n:1,tot:0};
- const ps=mStat(cst.mask),ns=mStat(R.M.mask),vx=ns.cx-ps.cx,vy=ns.cy-ps.cy;
- cst={mask:R.M.mask,bb:R.cb,c:{x:ns.cx,y:ns.cy},vel:{x:(cst.vel?.x||0)*.4+vx*.6,y:(cst.vel?.y||0)*.4+vy*.6}};
- if(R.M.iou>.5&&(R.M.sim==null||R.M.sim>.5)){const s=mSig(R.M.mask,frameData());if(s){if(!cident)cident=copySig(s);else for(const k of['t','l'])if(s[k])cident[k]=cident[k]?cident[k].map((x,q)=>.9*x+.1*s[k][q]):s[k].slice()}}
- return{lm:R.lm,src:R.lm?.src||'char',rej:!R.lm,n:R.n,tot:R.tot,dis:R.dis,disp:R.disp,resc:false,cm:R.cm,cb:R.cb,off:R.off}}
-// verify sweep for one frame in Character mode: re-segment from a neighbouring frame's mask and re-measure with every pass
-async function recheckChar(i,why){const f=frames[i],nb=[frames[i-1],frames[i+1],f].find(q=>q?.cm),pr=nb&&stateFrom(nb);
- if(!pr){if(!f.lm)f.flag='missing';return false}
- rep.rechecked++;const R=await measureChar(pr,'max',f.lm||nb.lm||null,0);if(!R||!R.lm){if(!f.lm)f.flag='missing';return false}
- const nl=R.lm.map(p=>({...p}));
- if(!f.lm||bad(i,nl)<bad(i,f.lm)*.8){f.lm=nl;f.src='verified';f.n=R.n;f.cm=R.cm;f.cb=R.cb;rep.fixed++;const d=devOf(i,nl);f.flag=d>Math.max(.08,tolV()*1.7)||stretch(nl)>1.4?'review: '+why:'';return true}
- f.flag='review: '+why;return false}
-// ---- picking the character: click it, SAM cuts it out. Click more to add, Shift+click to remove, Larger/Smaller to change how much is included.
-function charPick(){if(!V.src)return st('Load a video first.');picking=true;lassoing=false;$('lasso').classList.remove('on');cpick=null;lastT=-1;O.style.cursor='crosshair';
- st('Click the character on the first frame of the clip. Click more spots to add, Shift+click to remove (background or another character).')}
-function applyPick(){const c=cpick.cands[cpick.ord[cpick.k]],s=mStat(c.m);cseed={mask:c.m,bb:{x0:s.x0,y0:s.y0,x1:s.x1,y1:s.y1},c:{x:s.cx,y:s.cy},t:cpick.t,sig:c.sig};lastT=-1;
- st(`Character mask ${cpick.k+1} of ${cpick.ord.length} (${(s.n/c.m.w/c.m.h*100).toFixed(1)}% of the frame). Add or remove spots with clicks, use Larger/Smaller, then press Analyze.`)}
-async function charClick(pt,neg){try{await ensureSAM()}catch(e){picking=false;O.style.cursor='';return st('Character model could not load ('+e.message+'). It needs internet access to download it.')}
- st('Segmenting…');const t=V.currentTime;
- try{if(!cpick||Math.abs(cpick.t-t)>1e-3)cpick={t,E:await samEmbed({x0:0,y0:0,x1:1,y1:1}),pts:[]};
-  cpick.pts.push({x:pt.x,y:pt.y,l:neg?0:1});const c=await samDecode(cpick.E,cpick.pts);if(!c.length){cpick.pts.pop();return st('No mask found there. Click directly on the character.')}
-  const im_=frameData();for(const q of c)q.sig=mSig(q.m,im_);cpick.cands=c;cpick.ord=c.map((_,i)=>i).sort((a,b)=>mStat(c[a].m).n-mStat(c[b].m).n);let k=cpick.ord.length-1;while(k>0&&c[cpick.ord[k]].score<.8)k--;cpick.k=k;applyPick()}
- catch(e){console.error(e);st('Segmentation failed: '+e.message)}}
-// ====================== /CHARACTER MODE ======================
 // ---- lasso geometry
 const inPoly=(x,y,P)=>{let c=false;for(let i=0,j=P.length-1;i<P.length;j=i++){const[xi,yi]=P[i],[xj,yj]=P[j];if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)c=!c}return c};
 const bbOf=P=>({x0:Math.min(...P.map(p=>p[0])),x1:Math.max(...P.map(p=>p[0])),y0:Math.min(...P.map(p=>p[1])),y1:Math.max(...P.map(p=>p[1]))});
@@ -271,8 +156,6 @@ function drawLassoOv(w,h,lm){const lw=Math.max(2,w/320);
 function choose(c,prev,miss){if(!c.length)return null;const L=lasso&&lassoNow(prev),LK=lockOn(),
  fo=l=>{if(!L)return 0;const q=l.filter(p=>p.v>.3);return q.length?q.filter(p=>inPoly(p.x,p.y,L.pts)).length/q.length:0},
  ap=l=>{if(!LK||!ident)return null;if(l.sg===undefined)l.sg=sigOf(l);return simSig(l.sg,ident)};
- if(CH()){ // the mask already fixed who the subject is, so only pick the clearest / most continuous pose
-  if(!prev)return c.reduce((b,l)=>!b||vis(l)>vis(b)?l:b,null);const pb=bs(box(prev));let b=null,bc=1e9;for(const l of c){const d=cd(l,prev)/pb,cost=d-.5*vis(l);if(d<5&&cost<bc){bc=cost;b=l}}return b}
  if(!prev){
   if(LK&&seed){let b=null,bc=1e9;const near=Math.abs(seed.t-start)<.3;for(const l of c){const q=box(l),tc=torsoC(l),d=Math.hypot((tc.x-seed.c.x)*VW(),(tc.y-seed.c.y)*VH())/bs(q),sm=ap(l),cost=d*(near?1:.25)+(sm===null?0:2.2*(1-sm))-.5*vis(l)-(L?2*fo(l):0);if(cost<bc){bc=cost;b=l}}return b}
   if(L){let b=null,bc=1e9;for(const l of c){const q=box(l),d=Math.hypot(((q.x0+q.x1)/2-L.c.x)*VW(),((q.y0+q.y1)/2-L.c.y)*VH())/bs(q),cost=d-3*fo(l)-.5*vis(l);if(cost<bc){bc=cost;b=l}}return b}
@@ -332,13 +215,12 @@ async function mkSess(buf,label,dims){for(const ep of dwEP==='wasm'?[['wasm']]:[
   await s.run({[s.inputNames[0]]:new ort.Tensor('float32',new Float32Array(dims.reduce((a,b)=>a*b)),dims)});dwEP=ep[0];return s}catch(e){console.warn(label,ep,e);if(ep.length===1)throw e}}}
 async function ensureDW(){await loadORT();
  if(!dwP)dwP=await mkSess(await fetchModel(HF+'dw-ll_ucoco_384.onnx','pose model'),'pose model',[1,3,DW.H,DW.W]);
- if(!dwD&&$('ddet').value==='yolox'&&!CH())dwD=await mkSess(await fetchModel(HF+'yolox_l.onnx','person detector'),'person detector',[1,3,640,640])}
+ if(!dwD&&$('ddet').value==='yolox')dwD=await mkSess(await fetchModel(HF+'yolox_l.onnx','person detector'),'person detector',[1,3,640,640])}
 const pcv=document.createElement('canvas'),pg=pcv.getContext('2d',{willReadFrequently:true}),dcv=document.createElement('canvas'),dg=dcv.getContext('2d',{willReadFrequently:true});pcv.width=DW.W;pcv.height=DW.H;dcv.width=dcv.height=640;
 // top-down pose on a person box (normalized). o: mirror, enh, pad, mask. Returns 33 landmarks in frame coordinates.
 async function dwPose(bx,o={}){const W=VW(),H=VH(),pad=o.pad||1.25,ccx=(bx.x0+bx.x1)/2*W,ccy=(bx.y0+bx.y1)/2*H,asp=DW.W/DW.H;
  let sw=Math.max(8,(bx.x1-bx.x0)*W*pad),sh=Math.max(8,(bx.y1-bx.y0)*H*pad);if(sw>sh*asp)sh=sw/asp;else sw=sh*asp;const sx=ccx-sw/2,sy=ccy-sh/2;
  pg.save();pg.fillStyle='#000';pg.fillRect(0,0,DW.W,DW.H);pg.filter=o.enh?'contrast(1.35) saturate(1.2)':'none';if(o.mirror){pg.translate(DW.W,0);pg.scale(-1,1)}pg.drawImage(V,sx,sy,sw,sh,0,0,DW.W,DW.H);pg.restore();
- if(o.pm){pg.save();if(o.mirror){pg.translate(DW.W,0);pg.scale(-1,1)}pg.drawImage(o.pm,sx/W*o.pm.width,sy/H*o.pm.height,sw/W*o.pm.width,sh/H*o.pm.height,0,0,DW.W,DW.H);pg.restore()}
  if(o.mask){pg.save();pg.fillStyle='#808080';pg.beginPath();pg.rect(0,0,DW.W,DW.H);o.mask.forEach(([x,y],j)=>{let X=(x*W-sx)/sw*DW.W;if(o.mirror)X=DW.W-X;const Y=(y*H-sy)/sh*DW.H;j?pg.lineTo(X,Y):pg.moveTo(X,Y)});pg.closePath();pg.fill('evenodd');pg.restore()}
  const d=pg.getImageData(0,0,DW.W,DW.H).data,n=DW.W*DW.H,f=new Float32Array(3*n);for(let i=0;i<n;i++){f[i]=(d[4*i]-123.675)/58.395;f[n+i]=(d[4*i+1]-116.28)/57.12;f[2*n+i]=(d[4*i+2]-103.53)/57.375}
  const res=await dwP.run({[dwP.inputNames[0]]:new ort.Tensor('float32',f,[1,3,DW.H,DW.W])});let tx=null,ty=null;
@@ -379,7 +261,7 @@ async function getLM(mode){const np=+$('np').value||1,key=[$('mdl').value,$('cd'
  if(LMs.key!==key){for(const m of['VIDEO','IMAGE']){try{LMs[m]?.close()}catch{}}LMs={key};tsBase=0}
  if(!LMs[mode])LMs[mode]=await PoseLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:MURL($('mdl').value),delegate},runningMode:mode,numPoses:np,minPoseDetectionConfidence:+$('cd').value,minPosePresenceConfidence:+$('cp').value,minTrackingConfidence:+$('ct').value});return LMs[mode]}
 // one frame. off = single video pass; fast = retry only when lost; care = 2 independent passes that must agree (+ tie-breakers); max = 5+ passes incl. mirror/enhanced/wide
-async function detect(i,prev,miss){if(CH())return detectChar(i,prev,miss);if(engine()==='dw')return detectDW(i,prev,miss);const lvl=$('smart').checked?$('thr').value:'off',tol=tolV(),vm=await getLM('VIDEO');
+async function detect(i,prev,miss){if(engine()==='dw')return detectDW(i,prev,miss);const lvl=$('smart').checked?$('thr').value:'off',tol=tolV(),vm=await getLM('VIDEO');
  const all=vm.detectForVideo(V,tsBase+Math.round(i*1000/fps)).landmarks.map(l=>tag(nm(l),'full'));let seen=all.length;const A=choose(all,prev,miss);
  const done=(lm,o)=>({lm,src:lm?.src||'full',rej:!lm&&seen>0,n:1,tot:lm?1:0,...o});
  if(lvl==='off')return done(A);
@@ -405,9 +287,9 @@ function devOf(i,lm){const nb=[];for(const j of[i-2,i-1,i+1,i+2])if(frames[j]?.l
 const bad=(i,lm)=>{const d=devOf(i,lm);return(isNaN(d)?0:d)+Math.max(0,stretch(lm)-1.4)*.3+(1-vis(lm))*.1};
 function suspects(){buildBR();const th=Math.max(.08,tolV()*1.7),out=[];
  frames.forEach((f,i)=>{if(!f.lm){out.push([i,'missing']);return}const r=[],fl=f.flag||'';
-  if(/jump/.test(fl))r.push('jump');if(/low confidence/.test(fl))r.push('low confidence');if(/disputed/.test(fl))r.push('passes disagree');if(/off-mask/.test(fl))r.push('joints off the character');
+  if(/jump/.test(fl))r.push('jump');if(/low confidence/.test(fl))r.push('low confidence');if(/disputed/.test(fl))r.push('passes disagree');
   if(devOf(i,f.lm)>th)r.push('off-trend');if(stretch(f.lm)>1.4)r.push('stretched limb');if(r.length)out.push([i,r.join(', ')])});return out}
-async function recheck(i,why){const f=frames[i];await seek(start+i/fps);if(CH())return recheckChar(i,why);
+async function recheck(i,why){const f=frames[i];await seek(start+i/fps);
  const nb=[frames[i-1]?.lm,frames[i+1]?.lm].filter(Boolean);let ref=null;
  if(nb.length===2)ref=nb[0].map((p,k)=>({x:(p.x+nb[1][k].x)/2,y:(p.y+nb[1][k].y)/2,v:Math.min(p.v,nb[1][k].v)}));else if(nb.length===1)ref=nb[0];else if(f.lm)ref=f.lm;
  const dw=engine()==='dw',im=dw?null:await getLM('IMAGE'),cs=[],mask=lasso&&$('lmask').checked?maskPoly(ref):null,tol=tolV(),q=dw?null:roiFor(ref),qw=dw?null:roiFor(ref,1.8);
@@ -426,19 +308,18 @@ async function verifySweeps(rounds){for(let r=1;r<=rounds&&!stop;r++){const sus=
 const seek=t=>new Promise(r=>{t=Math.min(t,V.duration);let d=false;const fin=()=>{if(d)return;d=true;V.onseeked=null;r()};
  if(Math.abs(V.currentTime-t)<1e-4)return setTimeout(fin,0);
  V.onseeked=()=>{if(V.requestVideoFrameCallback){V.requestVideoFrameCallback(fin);setTimeout(fin,150)}else setTimeout(fin,50)};V.currentTime=t});
-async function analyze(){if(!V.src)return st('Load a video first.');if(CH()&&!cseed)return st('Pick the character first: press Pick character, then click it on the video.');picking=false;O.style.cursor='';if(!CH()&&engine()==='mp'&&!fs)return st('MediaPipe model not ready yet.');
+async function analyze(){if(!V.src)return st('Load a video first.');picking=false;O.style.cursor='';if(engine()==='mp'&&!fs)return st('MediaPipe model not ready yet.');
  stop=false;V.pause();fps=+$('fps').value;start=+$('t0').value||0;const end=Math.min(+$('t1').value||V.duration,V.duration),n=Math.floor((end-start)*fps)+1;if(n<2)return st('Clip too short.');
  const lvl=$('smart').checked?$('thr').value:'off',rounds={off:0,fast:0,care:1,max:2}[lvl];
- if(CH()){$('analyze').disabled=true;try{await ensureDW();await ensureSAM();st('Character tracker ready ('+samEP+' + '+dwEP+').')}catch(e){console.error(e);$('analyze').disabled=false;return st('Character tracker could not load ('+e.message+'). It needs internet access to download its models.')}}
- else if(engine()==='dw'){$('analyze').disabled=true;try{await ensureDW();st('Advanced tracker ready ('+dwEP+').')}catch(e){console.error(e);$('analyze').disabled=false;$('eng').value='mp';return st('Advanced tracker could not load ('+e.message+'). It needs internet access to download its models. Switched to MediaPipe: press Analyze to continue with that.')}}
+ if(engine()==='dw'){$('analyze').disabled=true;try{await ensureDW();st('Advanced tracker ready ('+dwEP+').')}catch(e){console.error(e);$('analyze').disabled=false;$('eng').value='mp';return st('Advanced tracker could not load ('+e.message+'). It needs internet access to download its models. Switched to MediaPipe: press Analyze to continue with that.')}}
  $('analyze').disabled=true;$('cancel').disabled=false;frames=[];CORR=[];undo=[];redo=[];rep={held:0,checked:0,disputed:0,rescued:0,swaps:0,rejected:0,missing:0,rechecked:0,fixed:0};
- let prev=null,miss=0,pc_=null;anchor=null;vel={x:0,y:0};ident=seed&&seed.sig?copySig(seed.sig):null;lastPx=null;cst=CH()&&cseed?{mask:cseed.mask,bb:cseed.bb,c:cseed.c,vel:{x:0,y:0}}:null;cident=CH()&&cseed?copySig(cseed.sig):null;const t0=performance.now();
- try{for(let i=0;i<n&&!stop;i++){await seek(start+i/fps);const held=$('held').checked&&isHeld(cst?.bb),hd=held&&prev,lf=frames[frames.length-1],r=hd?{lm:prev.map(p=>({...p})),src:'held',n:1,held:true,cb:lf?.cb,cm:lf?.cm}:await detect(i,prev,miss),lm=r.lm;let flag='';if(hd)rep.held++;
-  if(lm){if(deswap(lm,prev)){rep.swaps++;flag+='L/R swap '}if(prev&&cd(lm,prev)/bs(box(prev))>.6)flag+='jump ';else if(vis(lm)<.5)flag+='low confidence ';if(r.off)flag+='off-mask ';
+ let prev=null,miss=0,pc_=null;anchor=null;vel={x:0,y:0};ident=seed&&seed.sig?copySig(seed.sig):null;lastPx=null;const t0=performance.now();
+ try{for(let i=0;i<n&&!stop;i++){await seek(start+i/fps);const held=$('held').checked&&isHeld(null),hd=held&&prev,r=hd?{lm:prev.map(p=>({...p})),src:'held',n:1,held:true}:await detect(i,prev,miss),lm=r.lm;let flag='';if(hd)rep.held++;
+  if(lm){if(deswap(lm,prev)){rep.swaps++;flag+='L/R swap '}if(prev&&cd(lm,prev)/bs(box(prev))>.6)flag+='jump ';else if(vis(lm)<.5)flag+='low confidence ';
    if(r.disp){flag+='disputed ';rep.disputed++}else if(r.n>=2)rep.checked++;if(r.resc)rep.rescued++;
    const c=torsoC(lm);if(prev)vel={x:c.x-pc_.x,y:c.y-pc_.y};pc_=c;if(!anchor)anchor={c,s:bs(box(lm,true))};learnIdent(lm,r,flag);prev=lm;miss=0}
   else{miss++;flag='missing ';if(r.rej)rep.rejected++;vel={x:vel.x*.5,y:vel.y*.5}}
-  frames.push({t:i/fps,lm:lm?lm.map(p=>({...p})):null,src:r.src,flag:flag.trim(),n:r.n,dis:r.dis,cb:r.cb,cm:r.cm});$('prog').value=(i+1)/n;
+  frames.push({t:i/fps,lm:lm?lm.map(p=>({...p})):null,src:r.src,flag:flag.trim(),n:r.n,dis:r.dis});$('prog').value=(i+1)/n;
   if(i%2==0){const el=(performance.now()-t0)/1000;st(`Tracking ${i+1}/${n} (${lvl}) · ~${Math.round(el/(i+1)*(n-i-1))}s left${rounds?' + verify sweeps':''}`);await new Promise(r=>setTimeout(r))}}
   if(!stop&&rounds>0&&frames.length>2)await verifySweeps(rounds)}
  catch(e){console.error(e);st('Tracking error: '+e.message)}
@@ -494,7 +375,6 @@ function overlay(){const w=VW(),h=VH();if(O.width!==w){O.width=w;O.height=h;$('s
  if(subj){ox.save();ox.strokeStyle=C.brand;ox.shadowColor=C.brand;ox.shadowBlur=8;ox.lineWidth=3;ox.beginPath();ox.arc(subj.x*w,subj.y*h,w/40,0,7);ox.stroke();ox.beginPath();ox.arc(subj.x*w,subj.y*h,w/260,0,7);ox.fillStyle=C.brand;ox.fill();ox.restore()}
  if(seed&&lockOn()&&subj&&!picking){ox.save();ox.font='600 '+Math.round(w/60)+'px sans-serif';ox.fillStyle=C.brand;ox.textAlign='center';ox.fillText('LOCKED',subj.x*w,subj.y*h+w/40+w/50);ox.restore()}
  if(picking&&pickC.length&&Math.abs(V.currentTime-pickT)<.02)drawPick(w,h);
- if(CH()){if(cseed&&(picking||!frames.length))drawMaskOv(cseed.mask,w,h);const fb=frames[ci()]?.cb;if(fb&&!picking){ox.save();ox.setLineDash([w/90,w/130]);ox.strokeStyle=C.brand;ox.lineWidth=Math.max(2,w/320)*1.5;ox.strokeRect(fb.x0*w,fb.y0*h,(fb.x1-fb.x0)*w,(fb.y1-fb.y0)*h);ox.restore()}}
  const i=ci(),lm=EF[i];drawLassoOv(w,h,lm);if(i<0||!lm||!$('skel').checked)return;const lw=Math.max(2,w/300);ox.lineWidth=lw;
  for(const[a,b]of CONN){if(!ok(a)||!ok(b))continue;const m=Math.max(a,b);ox.strokeStyle=m<11?C.N:m%2?C.L:C.R;ox.globalAlpha=Math.min(lm[a].v,lm[b].v)<.5?.3:1;ox.beginPath();ox.moveTo(lm[a].x*w,lm[a].y*h);ox.lineTo(lm[b].x*w,lm[b].y*h);ox.stroke()}
  ox.font=Math.round(w/70)+'px sans-serif';lm.forEach((p,n)=>{if(!ok(n))return;ox.globalAlpha=Math.max(.25,p.v);ox.fillStyle=p.fixed?'#fff':n<11?C.N:n%2?C.L:C.R;ox.beginPath();ox.arc(p.x*w,p.y*h,lw*(p.fixed?2.5:1.5),0,7);ox.fill();if($('lbl').checked){ox.fillStyle='#fff';ox.fillText(NAMES[n],p.x*w+6,p.y*h)}});ox.globalAlpha=1;
@@ -503,7 +383,6 @@ function overlay(){const w=VW(),h=VH();if(O.width!==w){O.width=w;O.height=h;$('s
 const rel=e=>{const r=O.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height}};let cdrag=null,fdrag=null;const focusHit=p=>{const w=VW(),h=VH(),near=c=>Math.hypot((p.x-c.x)*w,(p.y-c.y)*h)<w*.03;if(subj&&near(subj))return'subj';const L=lasso&&lassoNow(EF[ci()]);return L&&near(L.c)?'lasso':null};
 function moveFocus(k,dx,dy){if(k==='subj'){subj={x:Math.min(1,Math.max(0,subj.x+dx)),y:Math.min(1,Math.max(0,subj.y+dy))};if(seed)seed.c={x:seed.c.x+dx,y:seed.c.y+dy};return}lasso={...lasso,pts:lasso.pts.map(([x,y])=>[x+dx,y+dy]),c:{x:lasso.c.x+dx,y:lasso.c.y+dy}};lasso.bb=bbOf(lasso.pts)}
 O.onpointerdown=e=>{const p=rel(e),i=ci();if(lassoing){lp=[[p.x,p.y]];drawingL=true;O.setPointerCapture(e.pointerId);lastT=-1;return}
- if(picking&&CH()){charClick(p,e.shiftKey);return}
  if(picking){picking=false;const ok_=pickC.length&&Math.abs(V.currentTime-pickT)<.02;
   if(pickC.length&&!ok_){pickC=[];lastT=-1;return st('The frame changed after the people were detected. Press Pick subject again.')}
   let k=-1,bd=.7;if(ok_)pickC.forEach((l,n)=>{const d=skelDist(l,p);if(d<bd){bd=d;k=n}});
@@ -525,12 +404,10 @@ async function peopleNow(){const out=[];
  return keep.sort((a,b)=>torsoC(a).x-torsoC(b).x)}
 function lockPerson(l,n){const s=sigOf(l),t=torsoC(l);seed={lm:l.map(q=>({...q})),t:V.currentTime,sig:s,c:{x:t.x,y:t.y}};ident=copySig(s);subj={x:t.x,y:t.y};
  st(`Locked on person ${n}${s?' (clothing colours captured)':''}. Tracking will keep this person even when others come close. `+(Math.abs(V.currentTime-start)>.3?'Tip: this is not the clip start, tracking will find them by clothing and size.':'Press Analyze.'))}
-$('pick').onclick=async()=>{if(CH())return charPick();if(!V.src)return st('Load a video first.');picking=true;lassoing=false;$('lasso').classList.remove('on');subj=null;seed=null;ident=null;pickC=[];lastT=-1;const t=V.currentTime;
+$('pick').onclick=async()=>{if(!V.src)return st('Load a video first.');picking=true;lassoing=false;$('lasso').classList.remove('on');subj=null;seed=null;ident=null;pickC=[];lastT=-1;const t=V.currentTime;
  st('Finding the people on this frame…');try{const c=await peopleNow();if(!picking||Math.abs(V.currentTime-t)>.02)return;pickC=c;pickT=t}catch(e){console.warn(e);pickC=[]}
  lastT=-1;st(pickC.length>1?`Found ${pickC.length} people, numbered on the video. Click the one you want to lock onto.`:pickC.length===1?'Found 1 person. Click them to lock on.':'No skeletons found on this frame. Click the person anyway, or move to a clearer frame.')};
-$('csmall').onclick=()=>{if(cpick?.cands&&cpick.k>0){cpick.k--;applyPick()}else st('Pick a character first, or this is already the smallest mask.')};
-$('cbig').onclick=()=>{if(cpick?.cands&&cpick.k<cpick.ord.length-1){cpick.k++;applyPick()}else st('Pick a character first, or this is already the largest mask.')};
-$('pclear').onclick=()=>{subj=null;seed=null;ident=null;pickC=[];cseed=null;cpick=null;cst=null;picking=false;O.style.cursor='';lastT=-1;st('Subject lock cleared. The largest, clearest person (or the lasso) will be used.')};
+$('pclear').onclick=()=>{subj=null;seed=null;ident=null;pickC=[];picking=false;O.style.cursor='';lastT=-1;st('Subject lock cleared. The largest, clearest person (or the lasso) will be used.')};
 // ---- graph (also used offscreen for PNG / reference sheet)
 const PL=48,PB=18;
 function drawGraph(cv,pr,vw,live,id=sel,mini=false){const w=cv.width,h=cv.height,g=cv.getContext('2d');g.fillStyle='#0d0f24';g.fillRect(0,0,w,h);const s=S[id]?.[pr];if(!s||!s.length)return null;
@@ -567,9 +444,9 @@ const dl=(n,t,m)=>{const a=document.createElement('a');a.href=URL.createObjectUR
 const kcsv=ids=>'part,property,frame,time_s,value,easing,reason\n'+ids.flatMap(id=>KP.flatMap(p=>(K[id]?.[p]||[]).map(q=>[D[id].n,p,q.i,(q.i/fps).toFixed(4),q.v*U(p),easeName(q.e),q.why].join(',')))).join('\n');
 const fcsv=ids=>'part,frame,time_s,rotation,x,y,joint_angle,length,ang_vel,pos_vel,confidence\n'+ids.flatMap(id=>S[id].rot.map((_,i)=>[D[id].n,i,(i/fps).toFixed(4),...['rot','x','y','jt','len','vrot','vpos','c'].map(p=>S[id][p][i]*U(p))].join(','))).join('\n');
 $('csv').onclick=()=>{if(!frames.length)return st('Analyze first.');const sc=$('xs').value,ids=sc.startsWith('sel')?[sel]:act();dl('vid2anim.csv',sc.endsWith('all')?fcsv(ids):kcsv(ids),'text/csv')};
-const SET=['rig','mdl','smart','np','cd','cp','ct','mv','fps','sm','sP','sR','sJ','lf','preset','kR','kP','kMin','kMax','coord','off','wrap','t0','t1','xs','thr','dtol','lmask','fpad','eng','ddet','cmask','cfr','held','lock'];
+const SET=['rig','mdl','smart','np','cd','cp','ct','mv','fps','sm','sP','sR','sJ','lf','preset','kR','kP','kMin','kMax','coord','off','wrap','t0','t1','xs','thr','dtol','lmask','fpad','eng','ddet','held','lock'];
 const gs=()=>Object.fromEntries(SET.map(i=>[i,$(i).type==='checkbox'?$(i).checked:$(i).value])),ss=o=>{for(const i in o){if(!$(i))continue;if($(i).type==='checkbox')$(i).checked=o[i];else $(i).value=o[i]}};
-$('json').onclick=()=>frames.length?dl('vid2anim_analysis.json',JSON.stringify({meta,settings:gs(),removedParts:[...OFF],landmarksRaw:frames.map(({cm,...f})=>f),corrections:CORR,landmarksCorrected:EF,segments:D,rawSeries:RF,smoothedSeries:S,keyframes:K}),'application/json'):st('Analyze first.');
+$('json').onclick=()=>frames.length?dl('vid2anim_analysis.json',JSON.stringify({meta,settings:gs(),removedParts:[...OFF],landmarksRaw:frames,corrections:CORR,landmarksCorrected:EF,segments:D,rawSeries:RF,smoothedSeries:S,keyframes:K}),'application/json'):st('Analyze first.');
 $('gpng').onclick=()=>{if(!S[sel])return st('Analyze first.');const c=document.createElement('canvas');c.width=1400;c.height=420;drawGraph(c,prop,[0,frames.length-1]);c.toBlob(b=>dl(`graph_${sel}_${prop}.png`,b))};
 $('copyT').onclick=()=>{const k=KS();if(k)navigator.clipboard.writeText('frame,time,value,easing\n'+k.map(q=>[q.i,(q.i/fps).toFixed(3),q.v*U(prop),easeName(q.e)].join(',')).join('\n'))};
 async function sheet(){if(!S[sel])return st('Analyze first.');st('Building reference sheet…');const n=frames.length,c=document.createElement('canvas');c.width=900;c.height=260;
@@ -582,14 +459,14 @@ $('sheet').onclick=sheet;
 // ---- sessions (IndexedDB)
 const tx=(m,f)=>new Promise((res,rej)=>{const q=indexedDB.open('motiontrace',1)/* DB name kept so sessions saved before the rename still open */;q.onupgradeneeded=()=>q.result.createObjectStore('s',{keyPath:'name'});q.onerror=()=>rej(q.error);q.onsuccess=()=>{const t=q.result.transaction('s',m),r=f(t.objectStore('s'));t.oncomplete=()=>res(r.result);t.onerror=t.onabort=()=>rej(t.error)}});
 const listS=async()=>{try{const k=await tx('readonly',s=>s.getAllKeys());$('sess').innerHTML=k.map(n=>`<option>${n}</option>`).join('')}catch{}};
-$('save').onclick=async()=>{if(!frames.length)return st('Analyze first.');const name=prompt('Session name',meta.name||'session');if(!name)return;const o={name,meta,fps,start,frames,CORR,set:gs(),K,sel,prop,lasso,anchor,subj,seed,cseed,mode:CH()?'char':'human',off:[...OFF]};
+$('save').onclick=async()=>{if(!frames.length)return st('Analyze first.');const name=prompt('Session name',meta.name||'session');if(!name)return;const o={name,meta,fps,start,frames,CORR,set:gs(),K,sel,prop,lasso,anchor,subj,seed,off:[...OFF]};
  try{await tx('readwrite',s=>s.put({...o,video:curFile}));st('Session saved with video.')}catch(e){try{await tx('readwrite',s=>s.put({...o,video:null}));st('Saved without the video (storage limit). Reselect the video when reopening.')}catch(e2){st('Save failed: '+e2.message)}}listS()};
-$('open').onclick=async()=>{const n=$('sess').value;if(!n)return;const o=await tx('readonly',s=>s.get(n));if(!o)return;ss(o.set);OFF.clear();(o.off||[]).forEach(id=>OFF.add(id));applyOff();subj=o.subj||null;seed=o.seed||null;ident=null;cseed=o.cseed||null;cpick=null;cst=null;setMode(o.mode||'human',true);meta=o.meta;fps=o.fps;start=o.start;frames=o.frames;CORR=o.CORR||[];lasso=o.lasso||null;anchor=o.anchor||null;undo=[];redo=[];sel=o.sel;prop=o.prop;$('prop').value=prop;view=[0,Math.max(1,frames.length-1)];
+$('open').onclick=async()=>{const n=$('sess').value;if(!n)return;const o=await tx('readonly',s=>s.get(n));if(!o)return;ss(o.set);OFF.clear();(o.off||[]).forEach(id=>OFF.add(id));applyOff();subj=o.subj||null;seed=o.seed||null;ident=null;meta=o.meta;fps=o.fps;start=o.start;frames=(o.frames||[]).map(({cm,cb,...f})=>f);CORR=o.CORR||[];lasso=o.lasso||null;anchor=o.anchor||null;undo=[];redo=[];sel=o.sel;prop=o.prop;$('prop').value=prop;view=[0,Math.max(1,frames.length-1)];
  const fin=()=>{compute();K=o.K;selKf=-1;dirty=true;V.currentTime=start;st('Session opened.')};
  if(o.video){curFile=o.video;V.src=URL.createObjectURL(o.video);V.onloadedmetadata=()=>{$('scrub').max=V.duration;fin()}}else{fin();st('Opened without video — reselect the original video file to see playback.')}};
 $('del').onclick=async()=>{const n=$('sess').value;if(n&&confirm('Delete '+n+'?')){await tx('readwrite',s=>s.delete(n));listS()}};
-const clear=()=>{frames=[];EF=[];S={};R={};RF={};K={};CORR=[];undo=[];redo=[];selKf=-1;subj=null;seed=null;ident=null;pickC=[];cseed=null;cst=null;cident=null;cpick=null;lasso=null;anchor=null;lp=[];dirty=true;lastT=-1};
-$('reset').onclick=()=>{const l=lasso,sj=subj,sd=seed,cs0=cseed;clear();lasso=l;subj=sj;seed=sd;cseed=cs0;st('Analysis reset.')};$('newS').onclick=()=>{clear();V.removeAttribute('src');V.load();curFile=null;meta={};st('New session.')};
+const clear=()=>{frames=[];EF=[];S={};R={};RF={};K={};CORR=[];undo=[];redo=[];selKf=-1;subj=null;seed=null;ident=null;pickC=[];lasso=null;anchor=null;lp=[];dirty=true;lastT=-1};
+$('reset').onclick=()=>{const l=lasso,sj=subj,sd=seed;clear();lasso=l;subj=sj;seed=sd;st('Analysis reset.')};$('newS').onclick=()=>{clear();V.removeAttribute('src');V.load();curFile=null;meta={};st('New session.')};
 // ---- wiring
 $('file').onchange=e=>{const f=e.target.files[0];if(!f)return;curFile=f;V.src=URL.createObjectURL(f);V.onloadedmetadata=()=>{const keep=frames.length&&f.name===meta.name;if(!keep){clear();$('t0').value=0;$('t1').value=V.duration.toFixed(2)}meta={...meta,name:f.name,w:V.videoWidth,h:V.videoHeight,duration:V.duration};$('scrub').max=V.duration;st(`${f.name} · ${V.videoWidth}×${V.videoHeight} · ${V.duration.toFixed(1)}s · ${(f.size/1e6).toFixed(1)}MB`);if(keep)compute()}};
 $('analyze').onclick=analyze;$('cancel').onclick=()=>stop=true;
@@ -632,16 +509,9 @@ $('agpng').onclick=()=>{const n=frames.length;if(!S.head||n<2)return st('Analyze
  c.toBlob(b=>dl(`vid2anim_all_parts_${pr}.png`,b))};
 listS();init();
 
-// ---- scan mode (Human / Character) and sidebar tabs
-function setMode(m,keep){document.body.dataset.mode=m;$('modeH').classList.toggle('on',m==='human');$('modeC').classList.toggle('on',m==='char');
- $('pick').textContent=m==='char'?'Pick character':'Pick subject';picking=false;pickC=[];O.style.cursor='';lastT=-1;
- if(!keep){if(m==='char'){$('eng').value='dw';$('held').checked=true;$('cmask').checked=true;if($('thr').value==='fast')$('thr').value='care';$('dtol').value=8;
-   st('Character mode: press Pick character, click the character on the first frame, then Analyze. The segmentation model (about 50 MB) downloads on first use.')}
-  else{$('held').checked=false;$('dtol').value=6;st('Human mode.')}}
- try{localStorage.setItem('vid2anim.mode',m)}catch{}}
-$('modeH').onclick=()=>setMode('human');$('modeC').onclick=()=>setMode('char');
+// ---- sidebar tabs
 function showTab(t){for(const b of $('tabs').querySelectorAll('button'))b.classList.toggle('on',b.dataset.tab===t);for(const d of document.querySelectorAll('#lt .tab'))d.hidden=d.dataset.tab!==t;try{localStorage.setItem('vid2anim.tab',t)}catch{}}
 $('tabs').onclick=e=>{const t=e.target.dataset?.tab;if(t)showTab(t)};
-try{showTab(localStorage.getItem('vid2anim.tab')||'scan');const sm=localStorage.getItem('vid2anim.mode');if(sm==='char')setMode('char')}catch{showTab('scan')}
+try{showTab(localStorage.getItem('vid2anim.tab')||'scan')}catch{showTab('scan')}
 // ---- Alight Motion export (alight.js): XML project and calibration file
 initAlight({$,st,dl,curve,act,K:()=>K,S:()=>S,D:()=>D,fps:()=>fps,n:()=>frames.length,W:VW,H:VH,off:()=>+$('off').value||0,title:()=>(meta&&meta.name)||'vid2anim'});
