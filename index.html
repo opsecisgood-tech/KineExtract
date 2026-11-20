@@ -16,7 +16,7 @@
 <small>Careful and Exhaustive are several times slower on purpose. Two independent passes must agree; if they don't, tie-breaker passes run, then suspicious frames are re-measured after the sweep.</small>
 <label><input id="held" type="checkbox"> Reuse repeated frames (animation drawn on twos / threes)</label>
 <label><input id="cam" type="checkbox" checked> Camera-shake compensation (keeps the lock through fast, shaky camera moves)</label>
-<small>Measures how the whole picture jumps between frames, then looks for the person where they should be after that jump. The person detector runs every frame while the camera is moving fast, and the lasso follows the camera. Turn off for a tripod shot to save a little time.</small></details>
+<small>Measures how the whole picture jumps between frames, then looks for the person where they should be after that jump. The person detector runs every frame while the camera is moving fast. The lasso and focus point never move on their own. Turn off for a tripod shot to save a little time.</small></details>
 <details open><summary>Human tracker engine</summary>
 <label>Model<select id="mdl"><option value="lite">Lite (fast)</option><option value="full">Full</option><option value="heavy" selected>Heavy (most accurate)</option></select></label>
 <label>Tracker engine<select id="eng"><option value="dw" selected>DWPose / RTMW: 133-point whole-body (advanced)</option><option value="mp">MediaPipe Pose (legacy, 33 points)</option></select></label>
