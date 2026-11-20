@@ -46,10 +46,7 @@ progress{width:160px;height:6px;appearance:none;-webkit-appearance:none;border:0
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 details details{margin:6px 0 0;background:var(--deep)}
 #amMsg{display:block;margin-top:4px;word-break:break-word}
-/* ---- scan mode switch, sidebar tabs, mode-specific blocks ---- */
-.seg{padding:2px;gap:2px}.seg button{border:0;background:transparent;padding:5px 16px;font-weight:600;border-radius:6px}
-.seg button.on{background:linear-gradient(135deg,var(--mag),#a600d6);color:#fff;box-shadow:0 0 12px #fc01e67a}
-body[data-mode=human] .c-only,body[data-mode=char] .h-only{display:none!important}
+/* ---- sidebar tabs ---- */
 #tabs{display:flex;gap:3px;margin:0 0 8px;padding:0 0 6px;position:sticky;top:-10px;z-index:3;background:#141730;border-bottom:1px solid var(--line)}
 aside #tabs button{flex:1;width:auto;margin:0;padding:6px 2px;font-size:11px;font-weight:600;border-radius:6px}
 aside #tabs button.on{background:linear-gradient(135deg,var(--mag),#a600d6);border-color:var(--mag-hi);color:#fff}
