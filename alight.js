@@ -1,4 +1,4 @@
-// vid2anim → Alight Motion exporter (.xml project).
+// vid2anim → Alight Motion exporter (.xml project). Default look: white stickman, thin black edge, round head.
 // Pure browser, no dependencies. Wired up from app.js with initAlight(ctx).
 
 /* ───────── helpers ───────── */
@@ -70,31 +70,49 @@ export function buildScene(c,o){
       return `<kf t="${T(k.i)}" v="${fmt(vals[j])}"${es?` e="${es}"`:''}/>`});
     return `<${tag}>\n        ${kf.join('\n        ')}\n      </${tag}>`;
   };
-  const layers=ids.map((id,li)=>{
-    const d=D[id],thick=thickBase(id)/480*cw*(o.thick/100);
-    const loc=channel('location',id,['x','y'],v=>`${f6(v[0]*cw)},${f6(v[1]*ch)},0.000000`);
-    const scl=channel('scale',id,['len'],v=>`${f6(Math.max(.001,v[0]*ch/100))},${f6(Math.max(.001,thick/100))}`);
-    const rot=channel('rotation',id,['rot'],v=>f6(sgn*(v[0]+off)));
-    return `  <shape id="${li+1}" label="${esc(d.n)}" startTime="0" endTime="${totalMs}" fillType="color" s=".rect">
+  // ---- layer list, bottom to top
+  const WHITE='#FFFFFFFF',BLACK='#FF000000',items=[],locFmt=v=>`${f6(v[0]*cw)},${f6(v[1]*ch)},0.000000`,rotCh=id=>channel('rotation',id,['rot'],v=>f6(sgn*(v[0]+off)));
+  if(o.style==='classic'){
+    for(const id of ids){const d=D[id],thick=thickBase(id)/480*cw*(o.thick/100);
+      items.push({label:d.n,sid:'.rect',color:sideColor(d),tf:[channel('location',id,['x','y'],locFmt),channel('scale',id,['len'],v=>`${f6(Math.max(.001,v[0]*ch/100))},${f6(Math.max(.001,thick/100))}`),rotCh(id)]})}
+  }else{
+    // Stickman: every part is a thin white bar. The thin black edge is a slightly bigger black bar underneath (so it only uses the same
+    // rectangle + colour tags as the classic look). All edges go under all white bars, which makes the joints merge into one clean outline.
+    const lineW=Math.max(1,.0075*o.long*(o.thick/100)),edge=Math.max(0,(Number.isFinite(+o.edge)?+o.edge:2)*o.long/1080),
+      lines=ids.filter(id=>id!=='head'),pre={};
+    for(const id of lines)pre[id]={loc:channel('location',id,['x','y'],locFmt),rot:rotCh(id)};
+    // each bar is lengthened by one line width so neighbouring bars overlap at the joints instead of leaving notches
+    const sclOf=(id,pad)=>channel('scale',id,['len'],v=>`${f6(Math.max(.001,(v[0]*ch+lineW+pad)/100))},${f6(Math.max(.001,(lineW+pad)/100))}`);
+    if(edge>0)for(const id of lines)items.push({label:D[id].n+' edge',sid:'.rect',color:BLACK,tf:[pre[id].loc,sclOf(id,2*edge),pre[id].rot]});
+    for(const id of lines)items.push({label:D[id].n,sid:'.rect',color:WHITE,tf:[pre[id].loc,sclOf(id,0),pre[id].rot]});
+    if(ids.includes('head')){
+      // round head: a circle of steady size (the ear-to-nose line changes length every time the head turns, so it is not used for the size)
+      const medv=a=>{const q=(a||[]).filter(Number.isFinite).sort((x,y)=>x-y);return q.length?q[q.length>>1]:0},tl=medv(S.torso?.len),hl=medv(S.head?.len);
+      let hd=tl>0?.42*tl*ch:hl>0?2.4*hl*ch:lineW*8;hd=Math.max(lineW*4,hd*((+o.headPct||100)/100));
+      const loc=channel('location','head',['x','y'],locFmt),rs=esc((o.round||'.ellipse').trim()||'.ellipse'),sc=d=>`<scale value="${f6(d/100)},${f6(d/100)}"/>`;
+      if(edge>0)items.push({label:'Head edge',sid:rs,color:BLACK,tf:[loc,sc(hd+2*edge)]});
+      items.push({label:'Head',sid:rs,color:WHITE,tf:[loc,sc(hd)]});
+    }
+  }
+  if(o.order==='top')items.reverse();
+  const layers=items.map((it,li)=>`  <shape id="${li+1}" label="${esc(it.label)}" startTime="0" endTime="${totalMs}" fillType="color" s="${it.sid}">
     <transform>
-      ${loc}
-      ${scl}
-      ${rot}
+      ${it.tf.join('\n      ')}
     </transform>
-    <fillColor value="${sideColor(d)}"/>
-  </shape>`}).join('\n');
+    <fillColor value="${it.color}"/>
+  </shape>`).join('\n');
   const title=(o.title||'vid2anim').slice(0,60);
   const xml=`<?xml version="1.0" encoding="UTF-8"?>
 <scene title="${esc(title)}" width="${cw}" height="${ch}" exportWidth="${cw}" exportHeight="${ch}" bgcolor="${o.bg}" totalTime="${totalMs}" fps="${projFps}" modifiedTime="${Date.now()}" amver="1028425" ffver="106" am="com.alightcreative.motion/5.0.273.1028425" amplatform="android">
 ${layers}
 </scene>
 `;
-  return{xml,info:{layers:ids.length,canvas:`${cw}×${ch}`,ms:totalMs,fps:projFps,bytes:new Blob([xml]).size}};
+  return{xml,info:{layers:items.length,canvas:`${cw}×${ch}`,ms:totalMs,fps:projFps,bytes:new Blob([xml]).size}};
 }
 
 /* Calibration project: tiny scene that shows which timing / easing / rotation conventions your Alight Motion build uses. */
 export function buildCalibration(o){
-  const totalMs=4000,dur=4,tt=x=>(o.tmode==='frac'?x:x*4).toFixed(9),mk=(id,label,y,color,loc,extra='')=>`  <shape id="${id}" label="${esc(label)}" startTime="0" endTime="${totalMs}" fillType="color" s=".rect">
+  const totalMs=4000,dur=4,tt=x=>(o.tmode==='frac'?x:x*4).toFixed(9),mk=(id,label,y,color,loc,extra='',shape='.rect')=>`  <shape id="${id}" label="${esc(label)}" startTime="0" endTime="${totalMs}" fillType="color" s="${esc(shape)}">
     <transform>
       ${loc}${extra}
     </transform>
@@ -107,7 +125,10 @@ export function buildCalibration(o){
     mk(2,'TIME B - seconds mode: must ARRIVE at right edge exactly when clip ENDS',0,'#FFFF8A4C',mv(380,[['0.000000000',160],['4.000000000',920]]),sc),
     mk(3,'EASE arrive-key: sits almost still in first half, then rushes (= easing is on ARRIVING key)',0,'#FFFC01E6',mv(560,[[tt(0),160],[tt(.5),540,'cubicBezier 0.9 0 1 0.1'],[tt(1),920]]),sc),
     mk(4,'EASE depart-key: control, easing placed on DEPARTING key',0,'#FF3DFFA6',mv(740,[[tt(0),160,'cubicBezier 0.9 0 1 0.1'],[tt(.5),540],[tt(1),920]]),sc),
-    mk(5,'ROTATION - bar must turn CLOCKWISE and point DOWN at the end',0,'#FFFFE45E',`<location value="540.000000,900.000000,0.000000"/>`,`\n      <scale value="2.500000,0.300000"/>\n      <rotation>\n        <kf t="${tt(0)}" v="0.000000"/>\n        <kf t="${tt(1)}" v="90.000000"/>\n      </rotation>`)
+    mk(5,'ROTATION - bar must turn CLOCKWISE and point DOWN at the end',0,'#FFFFE45E',`<location value="540.000000,900.000000,0.000000"/>`,`\n      <scale value="2.500000,0.300000"/>\n      <rotation>\n        <kf t="${tt(0)}" v="0.000000"/>\n        <kf t="${tt(1)}" v="90.000000"/>\n      </rotation>`),
+    mk(6,'ROUND - must be a CIRCLE (missing or square: change "Round shape id" in the export panel)',0,'#FFFFFFFF',`<location value="160.000000,950.000000,0.000000"/>`,sc,o.round||'.ellipse'),
+    mk(7,'ORDER first in file - RED square',0,'#FFFF2D2D',`<location value="780.000000,950.000000,0.000000"/>`,sc),
+    mk(8,'ORDER second in file - BLUE square: if BLUE covers RED then first layer = bottom, if RED covers BLUE set "First layer = top"',0,'#FF2D6BFF',`<location value="830.000000,985.000000,0.000000"/>`,sc)
   ].join('\n');
   // note: layers 1,3,4 are fraction-mode; layer 2 is seconds-mode. The scene stays valid either way, the wrong one simply overshoots.
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -121,12 +142,12 @@ ${layers}
 export function initAlight(c){
   const $=c.$,st=c.st,LS='vid2anim.alight';
   if(['amXml','amCal','amShare','amMsg'].some(i=>!$(i))){console.warn('Alight panel not found in index.html, export disabled');return}
-  const F=['amLong','amBg','amThick','amTime','amEase','amDense','amFps','amInv'];
-  const get=i=>$(i).type==='checkbox'?$(i).checked:$(i).value;
+  const F=['amLong','amBg','amThick','amTime','amEase','amDense','amFps','amInv','amStyle','amEdge','amHead','amRound','amOrder'].filter(i=>$(i));
+  const get=i=>!$(i)?undefined:$(i).type==='checkbox'?$(i).checked:$(i).value;
   try{const s=JSON.parse(localStorage.getItem(LS)||'{}');for(const i of F)if(i in s&&$(i)){if($(i).type==='checkbox')$(i).checked=s[i];else $(i).value=s[i]}}catch{}
   const save=()=>{try{localStorage.setItem(LS,JSON.stringify(Object.fromEntries(F.map(i=>[i,get(i)]))))}catch{}};
   for(const i of F)$(i).addEventListener('change',save);
-  const opts=()=>({long:+get('amLong'),bg:get('amBg'),thick:+get('amThick')||100,tmode:get('amTime'),easeOn:get('amEase'),dense:get('amDense')==='dense',fps:get('amFps'),inv:get('amInv'),title:c.title()});
+  const opts=()=>({long:+get('amLong'),bg:get('amBg'),thick:+get('amThick')||100,tmode:get('amTime'),easeOn:get('amEase'),dense:get('amDense')==='dense',fps:get('amFps'),inv:get('amInv'),style:get('amStyle')||'stick',edge:$('amEdge')?+get('amEdge'):2,headPct:+get('amHead')||100,round:(get('amRound')||'.ellipse').trim()||'.ellipse',order:get('amOrder')||'bottom',title:c.title()});
   const safe=s=>(s||'vid2anim').replace(/\.[^.]+$/,'').replace(/[^\w\- ]+/g,'_').slice(0,40)||'vid2anim';
   const make=()=>{const o=opts();const r=buildScene(c,o);return{...r,name:safe(o.title)+'_alight.xml'}};
   const msg=t=>{$('amMsg').textContent=t;st(t)};
