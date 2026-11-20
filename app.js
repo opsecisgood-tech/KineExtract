@@ -1,5 +1,5 @@
 import {PoseLandmarker,FilesetResolver} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
-import {initAlight} from './alight.js?v=4';
+import {initAlight} from './alight.js?v=5';
 const $=i=>document.getElementById(i),V=$('v'),O=$('ov'),ox=O.getContext('2d'),G=$('graph'),EC=$('ezc'),ec=EC.getContext('2d'),PV=$('pv'),pc=PV.getContext('2d'),crop=document.createElement('canvas'),cx=crop.getContext('2d');
 const WASM="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm",MURL=m=>`https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_${m}/float16/1/pose_landmarker_${m}.task`;
 let fs,delegate='GPU',LMs={},tsBase=0,frames=[],EF=[],R={},RF={},S={},K={},CORR=[],undo=[],redo=[],sel='head',prop='rot',selKf=-1,stop=false,view=[0,1],fps=15,start=0,dirty=true,endAt=null,lastT=-1,meta={},curFile=null,subj=null,picking=false,hov=null,rep={},lasso=null,lp=[],lassoing=false,drawingL=false,anchor=null,vel={x:0,y:0},BR=null,seed=null,ident=null,pickC=[],pickT=-1,lastPx=null;
@@ -50,17 +50,18 @@ const wrapA=v=>v-360*Math.round(v/360),dv=(p,v)=>p==='rot'&&$('wrap').checked?wr
 const ci=()=>frames.length?Math.max(0,Math.min(frames.length-1,Math.round((V.currentTime-start)*fps))):-1;
 const st=t=>$('status').textContent=t;
 // ---- landmarks: adaptive filter + manual corrections (raw data is never overwritten)
-function filt(){const o=frames.map(f=>f.lm?f.lm.map(p=>({...p})):null);if(!$('lf').checked)return o;const Te=1/fps,al=c=>1/(1+1/(2*Math.PI*c)/Te);
- for(let k=0;k<33;k++)for(const ax of['x','y']){let xh=null,dh=0;for(const l of o){if(!l)continue;const x=l[k][ax];if(xh===null){xh=x;continue}dh+=al(1)*((x-xh)/Te-dh);xh+=al(1.5+8*Math.abs(dh))*(x-xh);l[k][ax]=xh}}return o}
+function filt(){const o=frames.map(f=>f.lm?f.lm.map(p=>({...p})):null);const cs=camShifts(),sh=sg=>{if(cs)o.forEach((l,i)=>{if(l)for(const p of l){p.x+=sg*cs[i][0];p.y+=sg*cs[i][1]}})};sh(-1);if($('lf').checked)filtRun(o);sh(1);return o}
+function filtRun(o){const Te=1/fps,al=c=>1/(1+1/(2*Math.PI*c)/Te);
+ for(let k=0;k<33;k++)for(const ax of['x','y']){let xh=null,dh=0;for(const l of o){if(!l)continue;const x=l[k][ax];if(xh===null){xh=x;continue}dh+=al(1)*((x-xh)/Te-dh);xh+=al(1.5+8*Math.abs(dh))*(x-xh);l[k][ax]=xh}}}
 function effective(){const E0=filt();EF=E0.map(l=>l?l.map(p=>({...p})):null);
  for(const c of CORR){const b=E0[c.i]?.[c.k];if(!b)continue;const dx=c.x-b.x,dy=c.y-b.y,r=c.r||0;
   for(let j=Math.max(0,c.i-r);j<=Math.min(EF.length-1,c.i+r);j++){const l=EF[j];if(!l)continue;const w=r?1-Math.abs(j-c.i)/(r+1):1;l[c.k].x+=dx*w;l[c.k].y+=dy*w;l[c.k].v=1;if(j===c.i)l[c.k].fixed=true}}}
 // ---- compute segment data
-function compute(){if(!frames.length)return;effective();const W=VW(),H=VH(),off=+$('off').value||0,mv=+$('mv').value;R={};
+function compute(){if(!frames.length)return;effective();const W=VW(),H=VH(),off=+$('off').value||0,mv=+$('mv').value,cs=camShifts();R={};
  for(const id in D){const d=D[id],r={rot:[],x:[],y:[],jt:[],len:[],c:[]};
-  EF.forEach(lm=>{if(!lm){for(const k in r)r[k].push(NaN);return}
+  EF.forEach((lm,fi)=>{if(!lm){for(const k in r)r[k].push(NaN);return}const[sx,sy]=cs?cs[fi]:[0,0];
    const a=pt(lm,d.a),b=pt(lm,d.b),c=Math.min(a.v,b.v),ok=c>=mv,dx=(b.x-a.x)*W,dy=(b.y-a.y)*H;
-   r.c.push(c);r.rot.push(ok?Math.atan2(dy,dx)*180/Math.PI-off:NaN);r.x.push(ok?(a.x+b.x)/2:NaN);r.y.push(ok?(a.y+b.y)/2:NaN);r.len.push(ok?Math.hypot(dx,dy)/H:NaN);
+   r.c.push(c);r.rot.push(ok?Math.atan2(dy,dx)*180/Math.PI-off:NaN);r.x.push(ok?(a.x+b.x)/2-sx:NaN);r.y.push(ok?(a.y+b.y)/2-sy:NaN);r.len.push(ok?Math.hypot(dx,dy)/H:NaN);
    r.jt.push(ok&&d.j?ang(d.j.map(s=>pt(lm,s)),W,H):NaN)});R[id]=r}
  smooth();genKF();probList()}
 const SL=p=>+$(p==='rot'?'sR':p==='jt'?'sJ':'sP').value;
@@ -132,6 +133,43 @@ function isHeld(bb){const im=frameData();if(!im)return false;const d=im.data,w=i
  let x0=0,x1=w,y0=0,y1=h;if(bb){x0=Math.max(0,Math.floor((bb.x0-.04)*w));x1=Math.min(w,Math.ceil((bb.x1+.04)*w));y0=Math.max(0,Math.floor((bb.y0-.04)*h));y1=Math.min(h,Math.ceil((bb.y1+.04)*h))}
  let s=0,c=0,big=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){const o=4*(y*w+x),df=Math.abs(d[o]-lastPx[o])+Math.abs(d[o+1]-lastPx[o+1])+Math.abs(d[o+2]-lastPx[o+2]);s+=df;c++;if(df>60)big++}
  const held=c>0&&s/c/3<1.2&&big/c<.006;if(!held)lastPx=new Uint8ClampedArray(d);return held}
+// ---- camera motion: how the whole picture moved between two analysed frames.
+// Block matching on a small grey copy of the frame, coarse to fine, background pixels only (the person's box is left out so their own
+// movement is not mistaken for camera movement). Result is a translation in frame units (+x = picture moved right).
+// @@cam-start
+const camG=im=>{const w=im.width,h=im.height,d=im.data,g=new Uint8Array(w*h);for(let i=0;i<w*h;i++)g[i]=(d[4*i]*77+d[4*i+1]*150+d[4*i+2]*29)>>8;return{w,h,g}};
+const camDown=(a,k)=>{const w=Math.floor(a.w/k),h=Math.floor(a.h/k),g=new Uint8Array(w*h);for(let y=0;y<h;y++)for(let x=0;x<w;x++){let t=0;for(let j=0;j<k;j++)for(let i=0;i<k;i++)t+=a.g[(y*k+j)*a.w+x*k+i];g[y*w+x]=t/(k*k)}return{w,h,g}};
+// 1 = background pixel, 0 = inside the (grown) subject box
+const camMask=(w,h,bb)=>{if(!bb)return null;const gx=(bb.x1-bb.x0)*.25+.02,gy=(bb.y1-bb.y0)*.25+.02,x0=Math.floor((bb.x0-gx)*w),x1=Math.ceil((bb.x1+gx)*w),y0=Math.floor((bb.y0-gy)*h),y1=Math.ceil((bb.y1+gy)*h),m=new Uint8Array(w*h).fill(1);let z=0;
+ for(let y=Math.max(0,y0);y<Math.min(h,y1);y++)for(let x=Math.max(0,x0);x<Math.min(w,x1);x++){m[y*w+x]=0;z++}return z>w*h*.7?null:m};
+// mean clipped |difference| between a(x,y) and b(x+dx,y+dy), over background pixels; 1e9 when too little overlaps
+function camSad(a,b,dx,dy,m,T,st){const w=a.w,h=a.h,x0=Math.max(0,-dx),x1=Math.min(w,w-dx),y0=Math.max(0,-dy),y1=Math.min(h,h-dy);let s=0,c=0;
+ for(let y=y0;y<y1;y+=st){const ra=y*w,rb=(y+dy)*w+dx;for(let x=x0;x<x1;x+=st){if(m&&!m[ra+x])continue;let d=a.g[ra+x]-b.g[rb+x];if(d<0)d=-d;s+=d>T?T:d;c++}}
+ return c>(w/st)*(h/st)*.15?s/c:1e9}
+function camEst(P,C,bb,R=14){if(!P||!C||P.w!==C.w||P.h!==C.h)return{x:0,y:0,c:0};
+ const k=4,p4=camDown(P,k),c4=camDown(C,k),m4=camMask(p4.w,p4.h,bb);let bx=0,by=0,bs_=1e18;
+ for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){const v=camSad(p4,c4,dx,dy,m4,40,1);if(v>=1e9)continue;const sc=v*(1+.004*Math.hypot(dx,dy));if(sc<bs_){bs_=sc;bx=dx;by=dy}}
+ if(bs_>=1e17)return{x:0,y:0,c:0};
+ const m1=camMask(P.w,P.h,bb),cx=bx*k,cy=by*k;let fx=cx,fy=cy,fb=1e18;
+ for(let dy=cy-5;dy<=cy+5;dy++)for(let dx=cx-5;dx<=cx+5;dx++){const v=camSad(P,C,dx,dy,m1,40,2);if(v<fb){fb=v;fx=dx;fy=dy}}
+ const s0=camSad(P,C,0,0,m1,40,2),gain=s0<1e9?(s0-fb)/(s0+1e-3):0;
+ if(fb>=1e9||(gain<.03&&Math.hypot(fx,fy)>2))return{x:0,y:0,c:0};
+ const sub=(l,c,r)=>{const d=l-2*c+r;return d>1e-9?Math.max(-.5,Math.min(.5,.5*(l-r)/d)):0},
+  ax=camSad(P,C,fx-1,fy,m1,40,2),bx2=camSad(P,C,fx+1,fy,m1,40,2),ay=camSad(P,C,fx,fy-1,m1,40,2),by2=camSad(P,C,fx,fy+1,m1,40,2);
+ const sx=ax<1e9&&bx2<1e9?sub(ax,fb,bx2):0,sy=ay<1e9&&by2<1e9?sub(ay,fb,by2):0;
+ return{x:(fx+sx)/P.w,y:(fy+sy)/P.h,c:Math.max(0,Math.min(1,gain*4))}}
+// @@cam-end
+let camPrevG=null,camCum={x:0,y:0},camUnc=0,camFast=false;
+function camStep(prevLM){const im=frameData();if(!im){camPrevG=null;return{x:0,y:0,c:0}}const cur=camG(im),P=camPrevG;camPrevG=cur;return camEst(P,cur,prevLM?box(prevLM,true):null)}
+const shiftLM=(l,dx,dy)=>{const o=l.map(p=>({...p,x:p.x+dx,y:p.y+dy}));o.src=l.src;return o};
+const ccOf=j=>frames[j]?.cc||[0,0];
+// per-frame camera offset to remove from positions (null = leave as filmed)
+const lpZ=(a0,tau)=>{const al=1-Math.exp(-1/(fps*tau)),n0=a0.length,P=Math.min(n0-1,Math.ceil(4*tau*fps)),a=[]; // odd reflection at both ends keeps a steady pan from leaving a start-up error
+ for(let k=P;k>=1;k--)a.push(2*a0[0]-a0[k]);for(const v of a0)a.push(v);for(let k=1;k<=P;k++)a.push(2*a0[n0-1]-a0[n0-1-k]);
+ const n=a.length,f=[],b=[];a.forEach((v,i)=>f.push(i?al*v+(1-al)*f[i-1]:v));for(let i=n-1;i>=0;i--)b[i]=i<n-1?al*a[i]+(1-al)*b[i+1]:a[i];return a0.map((_,i)=>(f[i+P]+b[i+P])/2)};
+function camShifts(){const m=$('stab')?.value||'off',n=frames.length;if(m==='off'||!n||!frames.some(f=>f.cc))return null;
+ const cx=fill(frames.map(f=>f.cc?f.cc[0]:NaN)),cy=fill(frames.map(f=>f.cc?f.cc[1]:NaN));if(m==='lock')return cx.map((v,i)=>[v,cy[i]]);
+ const tau=Math.max(.1,+$('stabT').value||.6),lx=lpZ(cx,tau),ly=lpZ(cy,tau);return cx.map((v,i)=>[v-lx[i],cy[i]-ly[i]])}
 // ---- lasso geometry
 const inPoly=(x,y,P)=>{let c=false;for(let i=0,j=P.length-1;i<P.length;j=i++){const[xi,yi]=P[i],[xj,yj]=P[j];if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)c=!c}return c};
 const bbOf=P=>({x0:Math.min(...P.map(p=>p[0])),x1:Math.max(...P.map(p=>p[0])),y0:Math.min(...P.map(p=>p[1])),y1:Math.max(...P.map(p=>p[1]))});
@@ -139,7 +177,7 @@ function cenOf(P){let a=0,x=0,y=0;for(let i=0;i<P.length;i++){const[x0,y0]=P[i],
 const torsoC=l=>({x:(l[11].x+l[12].x+l[23].x+l[24].x)/4,y:(l[11].y+l[12].y+l[23].y+l[24].y)/4});
 // The lasso and the subject circle are FIXED in video space. They never follow the person and never move on playback or scrubbing:
 // they only change when you draw a new lasso or drag the centre handle yourself.
-function lassoNow(){return lasso||null}
+function lassoNow(){if(!lasso)return null;const dx=camCum.x,dy=camCum.y;if(!dx&&!dy)return lasso;return{...lasso,pts:lasso.pts.map(([x,y])=>[x+dx,y+dy]),c:{x:lasso.c.x+dx,y:lasso.c.y+dy},bb:{x0:lasso.bb.x0+dx,x1:lasso.bb.x1+dx,y0:lasso.bb.y0+dy,y1:lasso.bb.y1+dy}}}
 function maskPoly(ref){const L=lassoNow(ref);if(!L)return null;const f=1+(+$('fpad').value||35)/100;return L.pts.map(([x,y])=>[L.c.x+(x-L.c.x)*f,L.c.y+(y-L.c.y)*f])}
 function finishLasso(){let P=lp;lp=[];$('lasso').classList.remove('on');O.style.cursor='';lastT=-1;
  if(P.length>90)P=P.filter((_,i)=>i%Math.ceil(P.length/90)===0);
@@ -232,10 +270,10 @@ async function yoloBoxes(thr=.3,maxN=4){if(!dwD)return[];const W=VW(),H=VH(),r=M
  const d=dg.getImageData(0,0,640,640).data,n=640*640,f=new Float32Array(3*n);for(let i=0;i<n;i++){f[i]=d[4*i];f[n+i]=d[4*i+1];f[2*n+i]=d[4*i+2]}
  const res=await dwD.run({[dwD.inputNames[0]]:new ort.Tensor('float32',f,[1,3,640,640])}),t=res[dwD.outputNames[0]];return yoloDecode(t.data,t.dims[1],t.dims[2],r,W,H,thr).slice(0,maxN)}
 // person box carried over from the previous frame's pose, leaning in the direction of motion
-function trackBox(l,useVel=true){const b=box(l,true),vx=useVel?vel.x:0,vy=useVel?vel.y:0;return{x0:Math.max(0,b.x0+Math.min(0,vx)*1.2),y0:Math.max(0,b.y0+Math.min(0,vy)*1.2),x1:Math.min(1,b.x1+Math.max(0,vx)*1.2),y1:Math.min(1,b.y1+Math.max(0,vy)*1.2)}}
+function trackBox(l,useVel=true){const b=box(l,true),vx=useVel?vel.x:0,vy=useVel?vel.y:0,m=useVel?camUnc:0;return{x0:Math.max(0,b.x0+Math.min(0,vx)*1.2-m),y0:Math.max(0,b.y0+Math.min(0,vy)*1.2-m),x1:Math.min(1,b.x1+Math.max(0,vx)*1.2+m),y1:Math.min(1,b.y1+Math.max(0,vy)*1.2+m)}}
 // one frame with the advanced engine. detector runs on the first frame, when lost, and every few frames; in between the box follows the pose (like a pose tracker)
 async function detectDW(i,prev,miss){const lvl=$('smart').checked?$('thr').value:'off',tol=tolV(),np=Math.max(2,+$('np').value||1);
- const tb=prev?trackBox(prev):null,every={off:8,fast:8,care:5,max:2}[lvl],needDet=$('ddet').value==='yolox'&&(!prev||miss>0||i%every===0||vis(prev)<.5);
+ const tb=prev?trackBox(prev):null,every={off:8,fast:8,care:5,max:2}[lvl],needDet=$('ddet').value==='yolox'&&(!prev||miss>0||i%every===0||vis(prev)<.5||camFast);
  const dets=needDet?await yoloBoxes(.3,np):[],mask=lasso&&$('lmask').checked?maskPoly(prev):null;let seen=dets.length;
  const props=[];if(tb)props.push({b:tb,s:'track'});for(const d of dets)if(!tb||lvl==='max'||iou(d,tb)<.6)props.push({b:d,s:'det'});
  if(!props.length)props.push({b:roiFor(prev)||{x0:0,y0:0,x1:1,y1:1},s:'ctx'});
@@ -282,15 +320,15 @@ function boneRatios(lm){const s=bs(box(lm));return BONES.map(([a,b])=>lm[a].v>.5
 function buildBR(){const cols=BONES.map(()=>[]);for(const f of frames)if(f.lm&&vis(f.lm)>.5)boneRatios(f.lm).forEach((r,j)=>{if(r>=0)cols[j].push(r)});
  BR=cols.map(c=>{if(c.length<5)return NaN;c.sort((a,b)=>a-b);return c[Math.floor(c.length*.8)]})}
 const stretch=lm=>{if(!BR)return 1;let m=1;boneRatios(lm).forEach((r,j)=>{if(r>=0&&BR[j]>0)m=Math.max(m,r/BR[j])});return m};
-function devOf(i,lm){const nb=[];for(const j of[i-2,i-1,i+1,i+2])if(frames[j]?.lm)nb.push(frames[j].lm);if(nb.length<2)return NaN;const s=bs(box(lm));let t=0,n=0;
+function devOf(i,lm){const nb=[],ci0=ccOf(i);for(const j of[i-2,i-1,i+1,i+2])if(frames[j]?.lm){const cj=ccOf(j);nb.push(shiftLM(frames[j].lm,ci0[0]-cj[0],ci0[1]-cj[1]))}if(nb.length<2)return NaN;const s=bs(box(lm));let t=0,n=0;
  for(const k of MAIN){if(lm[k].v<.3)continue;const q=nb.filter(l=>l[k].v>.3);if(q.length<2)continue;t+=Math.hypot((lm[k].x-med(q.map(l=>l[k].x)))*VW(),(lm[k].y-med(q.map(l=>l[k].y)))*VH())/s;n++}return n>=4?t/n:NaN}
 const bad=(i,lm)=>{const d=devOf(i,lm);return(isNaN(d)?0:d)+Math.max(0,stretch(lm)-1.4)*.3+(1-vis(lm))*.1};
 function suspects(){buildBR();const th=Math.max(.08,tolV()*1.7),out=[];
  frames.forEach((f,i)=>{if(!f.lm){out.push([i,'missing']);return}const r=[],fl=f.flag||'';
   if(/jump/.test(fl))r.push('jump');if(/low confidence/.test(fl))r.push('low confidence');if(/disputed/.test(fl))r.push('passes disagree');
   if(devOf(i,f.lm)>th)r.push('off-trend');if(stretch(f.lm)>1.4)r.push('stretched limb');if(r.length)out.push([i,r.join(', ')])});return out}
-async function recheck(i,why){const f=frames[i];await seek(start+i/fps);
- const nb=[frames[i-1]?.lm,frames[i+1]?.lm].filter(Boolean);let ref=null;
+async function recheck(i,why){const f=frames[i];await seek(start+i/fps);const c0=ccOf(i);camCum={x:c0[0],y:c0[1]};
+ const nb=[i-1,i+1].filter(j=>frames[j]?.lm).map(j=>{const cj=ccOf(j);return shiftLM(frames[j].lm,c0[0]-cj[0],c0[1]-cj[1])});let ref=null;
  if(nb.length===2)ref=nb[0].map((p,k)=>({x:(p.x+nb[1][k].x)/2,y:(p.y+nb[1][k].y)/2,v:Math.min(p.v,nb[1][k].v)}));else if(nb.length===1)ref=nb[0];else if(f.lm)ref=f.lm;
  const dw=engine()==='dw',im=dw?null:await getLM('IMAGE'),cs=[],mask=lasso&&$('lmask').checked?maskPoly(ref):null,tol=tolV(),q=dw?null:roiFor(ref),qw=dw?null:roiFor(ref,1.8);
  if(f.lm)cs.push(tag(f.lm.map(p=>({...p})),'orig'));
@@ -313,20 +351,23 @@ async function analyze(){if(!V.src)return st('Load a video first.');picking=fals
  const lvl=$('smart').checked?$('thr').value:'off',rounds={off:0,fast:0,care:1,max:2}[lvl];
  if(engine()==='dw'){$('analyze').disabled=true;try{await ensureDW();st('Advanced tracker ready ('+dwEP+').')}catch(e){console.error(e);$('analyze').disabled=false;$('eng').value='mp';return st('Advanced tracker could not load ('+e.message+'). It needs internet access to download its models. Switched to MediaPipe: press Analyze to continue with that.')}}
  $('analyze').disabled=true;$('cancel').disabled=false;frames=[];CORR=[];undo=[];redo=[];rep={held:0,checked:0,disputed:0,rescued:0,swaps:0,rejected:0,missing:0,rechecked:0,fixed:0};
- let prev=null,miss=0,pc_=null;anchor=null;vel={x:0,y:0};ident=seed&&seed.sig?copySig(seed.sig):null;lastPx=null;const t0=performance.now();
- try{for(let i=0;i<n&&!stop;i++){await seek(start+i/fps);const held=$('held').checked&&isHeld(null),hd=held&&prev,r=hd?{lm:prev.map(p=>({...p})),src:'held',n:1,held:true}:await detect(i,prev,miss),lm=r.lm;let flag='';if(hd)rep.held++;
-  if(lm){if(deswap(lm,prev)){rep.swaps++;flag+='L/R swap '}if(prev&&cd(lm,prev)/bs(box(prev))>.6)flag+='jump ';else if(vis(lm)<.5)flag+='low confidence ';
+ let prev=null,miss=0,pc_=null,acc={x:0,y:0},camPeak=0;const camOn=!!$('cam')&&$('cam').checked;anchor=null;vel={x:0,y:0};ident=seed&&seed.sig?copySig(seed.sig):null;lastPx=null;camPrevG=null;camCum={x:0,y:0};camUnc=0;camFast=false;const t0=performance.now();
+ try{for(let i=0;i<n&&!stop;i++){await seek(start+i/fps);
+  const cam=camOn?camStep(prev):{x:0,y:0,c:0};acc.x+=cam.x;acc.y+=cam.y;camCum.x+=cam.x;camCum.y+=cam.y;const cs_=Math.max(Math.abs(cam.x),Math.abs(cam.y));camPeak=Math.max(camPeak,cs_);camFast=cs_>.012;camUnc=Math.min(.12,Math.hypot(cam.x,cam.y)*.7);
+  const prevS=prev&&(acc.x||acc.y)?shiftLM(prev,acc.x,acc.y):prev; // where the last known pose should be now that the camera has moved
+  const held=$('held').checked&&isHeld(null),hd=held&&prevS,r=hd?{lm:prevS.map(p=>({...p})),src:'held',n:1,held:true}:await detect(i,prevS,miss),lm=r.lm;let flag='';if(hd)rep.held++;
+  if(lm){if(deswap(lm,prevS)){rep.swaps++;flag+='L/R swap '}if(prevS&&cd(lm,prevS)/bs(box(prevS))>.6)flag+='jump ';else if(vis(lm)<.5)flag+='low confidence ';
    if(r.disp){flag+='disputed ';rep.disputed++}else if(r.n>=2)rep.checked++;if(r.resc)rep.rescued++;
-   const c=torsoC(lm);if(prev)vel={x:c.x-pc_.x,y:c.y-pc_.y};pc_=c;if(!anchor)anchor={c,s:bs(box(lm,true))};learnIdent(lm,r,flag);prev=lm;miss=0}
+   const c=torsoC(lm);if(prev)vel={x:c.x-pc_.x-acc.x,y:c.y-pc_.y-acc.y};pc_=c;if(!anchor)anchor={c,s:bs(box(lm,true))};learnIdent(lm,r,flag);prev=lm;miss=0;acc={x:0,y:0}}
   else{miss++;flag='missing ';if(r.rej)rep.rejected++;vel={x:vel.x*.5,y:vel.y*.5}}
-  frames.push({t:i/fps,lm:lm?lm.map(p=>({...p})):null,src:r.src,flag:flag.trim(),n:r.n,dis:r.dis});$('prog').value=(i+1)/n;
+  frames.push({t:i/fps,lm:lm?lm.map(p=>({...p})):null,src:r.src,flag:flag.trim(),n:r.n,dis:r.dis,...(camOn?{cc:[+camCum.x.toFixed(5),+camCum.y.toFixed(5)]}:{})});$('prog').value=(i+1)/n;
   if(i%2==0){const el=(performance.now()-t0)/1000;st(`Tracking ${i+1}/${n} (${lvl}) · ~${Math.round(el/(i+1)*(n-i-1))}s left${rounds?' + verify sweeps':''}`);await new Promise(r=>setTimeout(r))}}
   if(!stop&&rounds>0&&frames.length>2)await verifySweeps(rounds)}
  catch(e){console.error(e);st('Tracking error: '+e.message)}
- tsBase+=Math.round(n*1000/fps)+1000;$('analyze').disabled=false;$('cancel').disabled=true;if(!frames.length)return;rep.missing=frames.filter(f=>!f.lm).length;
+ camCum={x:0,y:0};camUnc=0;camFast=false;tsBase+=Math.round(n*1000/fps)+1000;$('analyze').disabled=false;$('cancel').disabled=true;if(!frames.length)return;rep.missing=frames.filter(f=>!f.lm).length;
  meta={...meta,w:V.videoWidth,h:V.videoHeight,duration:V.duration,fps,start,end};compute();view=[0,Math.max(1,frames.length-1)];
  const note=lasso&&Math.abs(lasso.t-start)>.3?` · Lasso was drawn at ${lasso.t.toFixed(2)}s, not the clip start: redraw it on the first frame for best focus.`:'';
- st(`${stop?'Cancelled, partial. ':'Done. '}${frames.length} frames · ${rep.checked} confirmed by 2+ agreeing passes · ${rep.rescued} rescued by retry · ${rep.swaps} L/R swaps fixed · ${rep.rechecked} re-measured in verify sweeps (${rep.fixed} corrected) · ${rep.rejected} wrong-subject jumps rejected · ${rep.held||0} repeated frames reused · ${rep.missing} untracked${note}`);V.currentTime=start}
+ st(`${stop?'Cancelled, partial. ':'Done. '}${frames.length} frames · ${rep.checked} confirmed by 2+ agreeing passes · ${rep.rescued} rescued by retry · ${rep.swaps} L/R swaps fixed · ${rep.rechecked} re-measured in verify sweeps (${rep.fixed} corrected) · ${rep.rejected} wrong-subject jumps rejected · ${rep.held||0} repeated frames reused · ${rep.missing} untracked${camOn&&camPeak>.004?` · camera shake compensated (peak ${(camPeak*100).toFixed(1)}% of the frame in one step)`:''}${note}`);V.currentTime=start}
 async function init(){try{fs=await FilesetResolver.forVisionTasks(WASM)}catch(e){return st('Could not load MediaPipe (internet / http required).')}
  for(const del of['GPU','CPU']){delegate=del;try{await getLM('VIDEO');st(`Model ready (${del}). Upload a video.`);return}catch(e){console.warn(e)}}st('Model failed to load.')}
 // ---- UI
@@ -444,7 +485,7 @@ const dl=(n,t,m)=>{const a=document.createElement('a');a.href=URL.createObjectUR
 const kcsv=ids=>'part,property,frame,time_s,value,easing,reason\n'+ids.flatMap(id=>KP.flatMap(p=>(K[id]?.[p]||[]).map(q=>[D[id].n,p,q.i,(q.i/fps).toFixed(4),q.v*U(p),easeName(q.e),q.why].join(',')))).join('\n');
 const fcsv=ids=>'part,frame,time_s,rotation,x,y,joint_angle,length,ang_vel,pos_vel,confidence\n'+ids.flatMap(id=>S[id].rot.map((_,i)=>[D[id].n,i,(i/fps).toFixed(4),...['rot','x','y','jt','len','vrot','vpos','c'].map(p=>S[id][p][i]*U(p))].join(','))).join('\n');
 $('csv').onclick=()=>{if(!frames.length)return st('Analyze first.');const sc=$('xs').value,ids=sc.startsWith('sel')?[sel]:act();dl('vid2anim.csv',sc.endsWith('all')?fcsv(ids):kcsv(ids),'text/csv')};
-const SET=['rig','mdl','smart','np','cd','cp','ct','mv','fps','sm','sP','sR','sJ','lf','preset','kR','kP','kMin','kMax','coord','off','wrap','t0','t1','xs','thr','dtol','lmask','fpad','eng','ddet','held','lock'];
+const SET=['rig','mdl','smart','np','cd','cp','ct','mv','fps','sm','sP','sR','sJ','lf','preset','kR','kP','kMin','kMax','coord','off','wrap','t0','t1','xs','thr','dtol','lmask','fpad','eng','ddet','held','lock','cam','stab','stabT'];
 const gs=()=>Object.fromEntries(SET.map(i=>[i,$(i).type==='checkbox'?$(i).checked:$(i).value])),ss=o=>{for(const i in o){if(!$(i))continue;if($(i).type==='checkbox')$(i).checked=o[i];else $(i).value=o[i]}};
 $('json').onclick=()=>frames.length?dl('vid2anim_analysis.json',JSON.stringify({meta,settings:gs(),removedParts:[...OFF],landmarksRaw:frames,corrections:CORR,landmarksCorrected:EF,segments:D,rawSeries:RF,smoothedSeries:S,keyframes:K}),'application/json'):st('Analyze first.');
 $('gpng').onclick=()=>{if(!S[sel])return st('Analyze first.');const c=document.createElement('canvas');c.width=1400;c.height=420;drawGraph(c,prop,[0,frames.length-1]);c.toBlob(b=>dl(`graph_${sel}_${prop}.png`,b))};
@@ -474,7 +515,7 @@ $('setA').onclick=()=>$('t0').value=V.currentTime.toFixed(2);$('setB').onclick=(
 $('prevClip').onclick=()=>{V.currentTime=+$('t0').value;endAt=+$('t1').value||V.duration;V.play()};
 $('play').onclick=()=>{endAt=null;V.paused?V.play():V.pause()};$('back').onclick=()=>{V.pause();V.currentTime-=1/fps};$('fwd').onclick=()=>{V.pause();V.currentTime+=1/fps};
 $('spd').onchange=()=>V.playbackRate=+$('spd').value;$('loop').onchange=()=>V.loop=$('loop').checked;$('scrub').oninput=()=>V.currentTime=+$('scrub').value;
-for(const i of['sm','sP','sR','sJ','lf','off','mv','kR','kP','kMin','kMax'])$(i).onchange=()=>{if(i.startsWith('k'))$('preset').value='cus';if(frames.length)compute()};
+for(const i of['sm','sP','sR','sJ','lf','off','mv','kR','kP','kMin','kMax','stab','stabT'])$(i).onchange=()=>{if(i.startsWith('k'))$('preset').value='cus';if(frames.length)compute()};
 for(const i of['rig','coord','wrap','skel','trail','tl','lbl','rawc'])$(i).onchange=()=>{dirty=true;lastT=-1};
 $('prop').onchange=()=>{prop=$('prop').value;selKf=-1;dirty=true};
 $('parts').onclick=e=>{const id=e.target.dataset.id;if(id){sel=id;selKf=-1;dirty=true}};
