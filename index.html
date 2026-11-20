@@ -1,96 +1,54 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>vid2anim · Video to animation</title><meta name="theme-color" content="#191c32"><link rel="icon" type="image/png" href="favicon.png"><link rel="icon" href="favicon.ico" sizes="any"><link rel="apple-touch-icon" href="apple-touch-icon.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Sora:wght@400;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css"></head><body data-mode="human">
-<header>
-<div class="brand"><img src="favicon.png" alt="" width="36" height="36"><div><b>vid2anim</b><small>Video to animation</small></div></div>
-<div class="grp"><label class="btn">Upload video<input id="file" type="file" accept="video/*" hidden></label><button id="analyze" class="go">Analyze</button><button id="cancel" disabled>Cancel</button></div>
-<div class="grp seg" role="group" aria-label="Scan mode"><button id="modeH" class="on" title="Real people: pose detector with person lock">Human</button><button id="modeC" title="Cartoon, anime and game characters: AI segmentation + pose on the cut-out">Character</button></div>
-<div class="stat"><span id="status">Loading model…</span><progress id="prog" value="0" max="1"></progress><small class="r">Processed locally in your browser. Nothing is uploaded.</small></div>
-</header>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>vid2anim</title><link rel="stylesheet" href="style.css"></head><body>
+<header><b>vid2anim</b><small>Video to animation</small>
+<label class="btn">Upload Video<input id="file" type="file" accept="video/*" hidden></label>
+<button id="analyze">Analyze</button><button id="cancel" disabled>Cancel</button>
+<select id="xs"><option value="all-kf">CSV: all parts, keyframes</option><option value="sel-kf">CSV: selected part, keyframes</option><option value="sel-all">CSV: selected part, all frames</option><option value="all-all">CSV: all parts, all frames</option></select>
+<button id="csv">CSV</button><button id="json">JSON</button><button id="sheet">Reference sheet</button><button id="gpng">Graph PNG</button>
+<button id="save">Save session</button><select id="sess"></select><button id="open">Open</button><button id="del">Delete</button><button id="newS">New</button><button id="reset">Reset analysis</button>
+<span id="status">Loading model…</span><progress id="prog" value="0" max="1"></progress>
+<small class="r">Processed locally in your browser. Nothing is uploaded.</small></header>
 <main>
 <aside id="lt">
-<nav id="tabs" aria-label="Sidebar sections"><button data-tab="scan" class="on">Scan</button><button data-tab="subj">Subject</button><button data-tab="clean">Clean-up</button><button data-tab="out">Export</button></nav>
-
-<div class="tab" data-tab="scan">
-<details open class="c-only"><summary>Character recognition (AI)</summary>
-<small>Cuts the character out on every frame (SlimSAM), follows it by shape and colour, then reads the pose from only that cut-out. About 50 MB of models download once, then stay cached.</small>
-<label><input id="cmask" type="checkbox" checked> Isolate the character for the pose model (hides background and other characters)</label>
-<label>Search area around the character<select id="cfr"><option value="tight">Tight (steady shots, fastest)</option><option value="norm" selected>Normal</option><option value="wide">Wide (fast action, camera moves)</option></select></label></details>
-<details open><summary>Tracking quality</summary>
-<label><input id="smart" type="checkbox" checked> Smart tracking (retry, cross-check passes, L/R swap fix)</label>
-<label>Thoroughness<select id="thr"><option value="fast">Fast: one pass, retry only if lost</option><option value="care" selected>Careful: every frame measured twice + verify sweep</option><option value="max">Exhaustive: 5+ passes, mirror &amp; zoom, 2 verify sweeps</option></select></label>
-<label>Agreement tolerance % of body<input id="dtol" type="number" step=".5" min="1" max="30" value="6"></label>
-<small>Careful and Exhaustive are several times slower on purpose. Two independent passes must agree; if they don't, tie-breaker passes run, then suspicious frames are re-measured after the sweep.</small>
-<label><input id="held" type="checkbox"> Reuse repeated frames (animation drawn on twos / threes)</label></details>
-<details open class="h-only"><summary>Human tracker engine</summary>
+<details open><summary>Rig &amp; body part</summary><select id="rig"><option value="1">Simple</option><option value="2" selected>Standard</option><option value="3">Detailed</option></select><div id="parts"></div></details>
+<details open><summary>Focus lasso</summary>
+<button id="lasso">Lasso focus area</button><button id="lclear">Clear lasso</button>
+<label><input id="lfollow" type="checkbox" checked> Focus follows the subject</label>
+<label><input id="lmask" type="checkbox"> Ignore everything outside the lasso</label>
+<label>Focus padding %<input id="fpad" type="number" min="0" max="200" value="35"></label>
+<small>Go to the first frame, press Lasso, then drag a loop around the spot to track. Tracking zooms in around its center and prefers the person inside it.</small></details>
+<details open><summary>Smart tracking</summary>
 <label>Model<select id="mdl"><option value="lite">Lite (fast)</option><option value="full">Full</option><option value="heavy" selected>Heavy (most accurate)</option></select></label>
+<label><input id="smart" type="checkbox" checked> Smart tracking (subject lock, ROI zoom retry, contrast retry, L/R swap fix)</label>
 <label>Tracker engine<select id="eng"><option value="dw" selected>DWPose / RTMW: 133-point whole-body (advanced)</option><option value="mp">MediaPipe Pose (legacy, 33 points)</option></select></label>
 <label>Person detector (advanced engine)<select id="ddet"><option value="yolox" selected>YOLOX-L (217 MB download, best)</option><option value="none">None: follow pose + lasso only</option></select></label>
 <small>The advanced engine runs fully in your browser (WebGPU, falls back to CPU). Models download once, about 350 MB, then stay cached. The model/confidence boxes below only apply to MediaPipe.</small>
+<label>Thoroughness<select id="thr"><option value="fast">Fast: one pass, retry only if lost</option><option value="care" selected>Careful: every frame measured twice + verify sweep</option><option value="max">Exhaustive: 5+ passes, mirror &amp; zoom, 2 verify sweeps</option></select></label>
+<label>Agreement tolerance % of body<input id="dtol" type="number" step=".5" min="1" max="30" value="6"></label>
+<small>Careful and Exhaustive are several times slower on purpose. Two independent passes must agree; if they don't, tie-breaker passes run, then suspicious frames are re-measured after the sweep.</small>
 <label>Poses to consider<input id="np" type="number" min="1" max="6" value="4"></label>
 <label>Detection conf<input id="cd" type="number" step=".05" min="0" max="1" value=".35"></label>
 <label>Presence conf<input id="cp" type="number" step=".05" min="0" max="1" value=".35"></label>
 <label>Tracking conf<input id="ct" type="number" step=".05" min="0" max="1" value=".4"></label>
-<label>Min landmark visibility<input id="mv" type="number" step=".05" min="0" max="1" value=".3"></label></details>
+<label>Min landmark visibility<input id="mv" type="number" step=".05" min="0" max="1" value=".3"></label>
+<button id="pick">Pick subject on video</button><small>Go to the first frame, press this, then click the person. Otherwise the largest, clearest person is used.</small></details>
 <details open><summary>Clip &amp; sampling</summary>
 <div class="row"><input id="t0" type="number" step="0.01" value="0" title="start s"><input id="t1" type="number" step="0.01" value="0" title="end s"></div>
 <div class="row"><button id="setA">Start=now</button><button id="setB">End=now</button><button id="prevClip">Preview</button></div>
 <select id="fps"><option>10</option><option selected>15</option><option>24</option><option>30</option></select><small>Lower FPS is faster but can miss fast motion.</small></details>
-</div>
-
-<div class="tab" data-tab="subj" hidden>
-<details open><summary>Who to track</summary>
-<small class="h-only">Use <b>Pick subject</b> above the video on the first frame: everyone found is numbered, click one. Their clothing colours are memorised and tracking stays on them even when people overlap. Drag the circle to nudge it. With no pick, the largest, clearest person is used.</small>
-<small class="c-only">Use <b>Pick character</b> above the video on the first frame, then click the character. Click more spots to add, Shift+click to remove, and use Larger / Smaller to change how much is included (just the outfit, the whole body, or the group).</small>
-<label class="h-only"><input id="lock" type="checkbox" checked> Identity lock (clothing colour + motion + size keep the chosen person when others stand close)</label></details>
-<details open class="h-only"><summary>Focus lasso</summary>
-<label><input id="lmask" type="checkbox"> Ignore everything outside the lasso</label>
-<label>Focus padding %<input id="fpad" type="number" min="0" max="200" value="35"></label>
-<small>Go to the first frame, press Lasso above the video, then drag a loop around the spot to track. Tracking zooms in around the lasso center and prefers the person inside it. The lasso and the subject circle stay put until you drag their center handle somewhere else.</small></details>
-<details open><summary>Body parts</summary><small>Untick a part to remove it from tracking, graphs and exports. Press Analyze again to re-track without it.</small><div id="pchips"><button data-p="all">Full body</button><button data-p="upper">Upper body</button><button data-p="lower">Lower body</button><button data-p="left">Left side</button><button data-p="right">Right side</button></div><select id="rig"><option value="1">Simple</option><option value="2" selected>Standard</option><option value="3">Detailed</option></select><div id="parts"></div></details>
-</div>
-
-<div class="tab" data-tab="clean" hidden>
-<details open><summary>Smoothing</summary>
+<details><summary>Smoothing</summary>
 <select id="sm"><option value="ma">Moving average</option><option value="ema" selected>Exponential (zero-lag)</option><option value="sg">Savitzky-Golay</option><option value="kal">Kalman (1D)</option><option value="none">None</option></select>
 <label>Position<input id="sP" type="range" min="0" max="3" value="1"></label><label>Rotation<input id="sR" type="range" min="0" max="3" value="1"></label><label>Joint angle<input id="sJ" type="range" min="0" max="3" value="1"></label><small>None · Low · Medium · High</small>
 <label><input id="lf" type="checkbox" checked> Adaptive landmark filter (One-Euro)</label></details>
-<details open><summary>Keyframes</summary><select id="preset"><option value="min">Minimal</option><option value="bal" selected>Balanced</option><option value="acc">Accurate</option><option value="cus">Custom</option></select>
+<details><summary>Keyframes</summary><select id="preset"><option value="min">Minimal</option><option value="bal" selected>Balanced</option><option value="acc">Accurate</option><option value="cus">Custom</option></select>
 <label>Rotation tolerance °<input id="kR" type="number" step=".1" value="3"></label><label>Position tolerance % of frame<input id="kP" type="number" step=".05" value=".6"></label>
 <label>Min gap (s)<input id="kMin" type="number" step=".05" value=".15"></label><label>Max gap (s, 0 = off)<input id="kMax" type="number" step=".1" value="0"></label></details>
 <details><summary>Units &amp; display</summary><select id="coord"><option value="norm">Normalized 0–1</option><option value="px">Video pixels</option></select>
 <label>Rotation offset ° (PNG default pose)<input id="off" type="number" value="0"></label>
 <label><input id="wrap" type="checkbox"> Rotation as ±180 (graph stays continuous)</label>
 <label><input id="skel" type="checkbox" checked> Skeleton</label><label><input id="lbl" type="checkbox"> Landmark names</label><label><input id="trail" type="checkbox" checked> Trail</label><label>Trail frames<input id="tl" type="number" value="30"></label></details>
-<details open><summary>Problem frames</summary><div id="probs"></div></details>
-</div>
-
-<div class="tab" data-tab="out" hidden>
-<details open><summary>Data export</summary><select id="xs"><option value="all-kf">CSV: all parts, keyframes</option><option value="sel-kf">CSV: selected part, keyframes</option><option value="sel-all">CSV: selected part, all frames</option><option value="all-all">CSV: all parts, all frames</option></select>
-<div class="row"><button id="csv">CSV</button><button id="json">JSON</button></div><div class="row"><button id="sheet">Reference sheet</button><button id="gpng">Graph PNG</button></div></details>
-<details open><summary>Alight Motion export</summary>
-<small>Builds a real Alight Motion project (.xml): one layer per body part with position, length and rotation keyframes, eased like your graphs. Time 0 = start of the clip, so drop your video under it at the same start.</small>
-<label>Canvas long side (px)<select id="amLong"><option>720</option><option selected>1080</option><option>1440</option><option>1920</option></select></label>
-<label>Background<select id="amBg"><option value="#FF0D0F24" selected>Deep navy</option><option value="#FF000000">Black</option><option value="#FFFFFFFF">White</option><option value="#FFD8D8D8">Light grey</option><option value="#00000000">Transparent</option></select></label>
-<label>Line thickness %<input id="amThick" type="number" min="20" max="400" value="100"></label>
-<label>Project fps<select id="amFps"><option value="match" selected>Match analysis (30 if unsupported)</option><option>24</option><option>30</option><option>60</option></select></label>
-<label>Keyframes<select id="amDense"><option value="kf" selected>As in the graphs (editable in Alight)</option><option value="dense">Every frame (exact, large file)</option></select></label>
-<details><summary>Compatibility</summary>
-<small>The Alight XML format is community-documented, not official. Import the calibration project (button below) and set these two to whatever behaves as the layer names say.</small>
-<label>Keyframe time unit<select id="amTime"><option value="frac" selected>Fraction of layer length</option><option value="sec">Seconds from layer start</option></select></label>
-<label>Easing stored on<select id="amEase"><option value="arrive" selected>Arriving keyframe</option><option value="depart">Departing keyframe</option></select></label>
-<label><input id="amInv" type="checkbox"> Invert rotation direction</label></details>
-<button id="amCal">Calibration project (.xml)</button>
-<div class="row"><button id="amXml" class="go">Download .xml</button><button id="amShare">Share file…</button></div>
-<small id="amMsg"></small></details>
-<details open><summary>Project &amp; sessions</summary><select id="sess"></select>
-<div class="row"><button id="open">Open</button><button id="save">Save session</button></div>
-<div class="row"><button id="del">Delete</button><button id="newS">New</button><button id="reset">Reset analysis</button></div></details>
-</div>
+<details><summary>Problem frames</summary><div id="probs"></div></details>
 </aside>
-<section id="mid">
-<div class="row ctl vtools"><b>Subject</b><button id="pick" class="go">Pick subject</button><button id="pclear">Clear</button>
-<button id="csmall" class="c-only" title="Smaller mask (just the outfit)">Smaller</button><button id="cbig" class="c-only" title="Larger mask (whole body or group)">Larger</button>
-<button id="lasso" class="h-only">Lasso</button><button id="lclear" class="h-only">Clear lasso</button></div>
-<div id="wrapv"><div id="stage"><video id="v" playsinline muted></video><canvas id="ov"></canvas></div><div id="pvw" hidden><canvas id="pv" width="480" height="270"></canvas></div></div>
+<section id="mid"><div id="wrapv"><div id="stage"><video id="v" playsinline muted></video><canvas id="ov"></canvas></div><div id="pvw" hidden><canvas id="pv" width="480" height="270"></canvas></div></div>
 <div class="row ctl"><button id="back">◀|</button><button id="play">Play</button><button id="fwd">|▶</button>
 <select id="spd"><option>0.25</option><option>0.5</option><option>0.75</option><option selected>1</option><option>1.5</option><option>2</option></select>
 <label><input id="loop" type="checkbox"> Loop</label><span id="tinfo"></span></div>
@@ -110,4 +68,4 @@
 <label><input id="rawc" type="checkbox" checked> Raw</label><small id="gmsg">Wheel/＋－ zoom · drag pan · click seek · drag ◇ keyframes to edit · hover for values</small></div>
 <div id="gw"><canvas id="graph"></canvas></div></footer>
 <div id="ag" hidden><div class="agh"><b>All parts</b><select id="agp"></select><small>Click a part to select it · double-click to close · green diamonds = keyframes</small><button id="agpng">Save PNG</button><button id="agx">Close</button></div><div id="agg"></div></div>
-<script type="module" src="app.js?v=5"></script></body></html>
+<script type="module" src="app.js"></script></body></html>
