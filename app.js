@@ -1,5 +1,5 @@
 import {PoseLandmarker,FilesetResolver} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
-import {initAlight} from './alight.js?v=6';
+import {initAlight} from './alight.js?v=7';
 const $=i=>document.getElementById(i),V=$('v'),O=$('ov'),ox=O.getContext('2d'),G=$('graph'),EC=$('ezc'),ec=EC.getContext('2d'),PV=$('pv'),pc=PV.getContext('2d'),crop=document.createElement('canvas'),cx=crop.getContext('2d');
 const WASM="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm",MURL=m=>`https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_${m}/float16/1/pose_landmarker_${m}.task`;
 let fs,delegate='GPU',LMs={},tsBase=0,frames=[],EF=[],R={},RF={},S={},K={},CORR=[],undo=[],redo=[],sel='head',prop='rot',selKf=-1,stop=false,view=[0,1],fps=15,start=0,dirty=true,endAt=null,lastT=-1,meta={},curFile=null,subj=null,picking=false,hov=null,rep={},lasso=null,lp=[],lassoing=false,drawingL=false,anchor=null,vel={x:0,y:0},BR=null,seed=null,ident=null,pickC=[],pickT=-1,lastPx=null;
