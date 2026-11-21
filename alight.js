@@ -10,6 +10,13 @@
 //                     and runs the overlap scan again on what Alight Motion will really draw.
 //   5. CHECK 3        you look at the preview and confirm (manual check) before the file can be saved.
 //   If something is wrong you can let the auto-fix move parts apart or move/hide parts yourself.
+//
+// v7: every shape now carries an explicit <size> (half-extent) tag alongside <scale>. Without it, Alight Motion fell
+// back to its own default half-extent instead of the one our Scale math assumes, which is what made every bar come
+// out a consistent fraction of its intended length ("bunched" limbs) once a real export was opened in the app,
+// even though our own preview — built from the same geometry model — looked right the whole time. Default size is
+// 50 (so a rect's drawn size is 2×50×scale = 100×scale, matching the existing "/100" convention used everywhere
+// below); "Shape size" in Compatibility exposes it in case a future AM build changes the real default.
 
 /* ───────── helpers ───────── */
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -295,24 +302,28 @@ function emit(M,dyn){
       return[v[0]*cw+m[0]+(d?d[2*fi]:0),v[1]*ch+m[1]+(d?d[2*fi+1]:0)]}});
   };
   const rotCh=id=>channel('rotation',id,['rot'],v=>f6(sgn*(v[0]+M.off)));
+  // Alight Motion's .rect draws at 2 × size × scale (size = half-extent; verified against real 5.0.27x/ffver106 exports).
+  // Every shape below must carry an explicit <size>, or AM falls back to its own default half-extent instead of ours —
+  // that mismatch is what was making every bar come out a consistent fraction of its intended length ("bunched" limbs).
+  const szVal=(Number.isFinite(+o.size)&&+o.size>0)?+o.size:50,sdiv=2*szVal,SZ=`<size value="${f6(szVal)},${f6(szVal)}"/>`;
   const WHITE='#FFFFFFFF',BLACK='#FF000000',items=[];
   if(!stick){
     for(const id of ids){const d=D[id],thick=M.thick(id);
-      items.push({pid:id,role:'main',label:d.n,sid:'.rect',color:sideColor(d),tf:[locCh(id),channel('scale',id,['len'],v=>`${f6(Math.max(.001,v[0]*ch/100))},${f6(Math.max(.001,thick/100))}`),rotCh(id)]})}
+      items.push({pid:id,role:'main',label:d.n,sid:'.rect',color:sideColor(d),tf:[locCh(id),SZ,channel('scale',id,['len'],v=>`${f6(Math.max(.001,v[0]*ch/sdiv))},${f6(Math.max(.001,thick/sdiv))}`),rotCh(id)]})}
   }else{
     // Stickman: every part is a thin white bar. The thin black edge is a slightly bigger black bar underneath (so it only uses the same
     // rectangle + colour tags as the classic look). All edges go under all white bars, which makes the joints merge into one clean outline.
     const lines=ids.filter(id=>id!=='head'),pre={};
     for(const id of lines)pre[id]={loc:locCh(id),rot:rotCh(id)};
     // each bar is lengthened by one line width so neighbouring bars overlap at the joints instead of leaving notches
-    const sclOf=(id,pad)=>channel('scale',id,['len'],v=>`${f6(Math.max(.001,(v[0]*ch+lineW+pad)/100))},${f6(Math.max(.001,(lineW+pad)/100))}`);
-    if(edge>0)for(const id of lines)items.push({pid:id,role:'edge',label:D[id].n+' edge',sid:'.rect',color:BLACK,tf:[pre[id].loc,sclOf(id,2*edge),pre[id].rot]});
-    for(const id of lines)items.push({pid:id,role:'main',label:D[id].n,sid:'.rect',color:WHITE,tf:[pre[id].loc,sclOf(id,0),pre[id].rot]});
+    const sclOf=(id,pad)=>channel('scale',id,['len'],v=>`${f6(Math.max(.001,(v[0]*ch+lineW+pad)/sdiv))},${f6(Math.max(.001,(lineW+pad)/sdiv))}`);
+    if(edge>0)for(const id of lines)items.push({pid:id,role:'edge',label:D[id].n+' edge',sid:'.rect',color:BLACK,tf:[pre[id].loc,SZ,sclOf(id,2*edge),pre[id].rot]});
+    for(const id of lines)items.push({pid:id,role:'main',label:D[id].n,sid:'.rect',color:WHITE,tf:[pre[id].loc,SZ,sclOf(id,0),pre[id].rot]});
     if(ids.includes('head')){
       // square head: a plain white square (same .rect shape as the bars) with a slightly bigger black square under it
-      const loc=locCh('head'),sq=d=>`<scale value="${f6(d/100)},${f6(d/100)}"/>`;
-      if(edge>0)items.push({pid:'head',role:'edge',label:'Head edge',sid:'.rect',color:BLACK,tf:[loc,sq(hd+2*edge)]});
-      items.push({pid:'head',role:'main',label:'Head',sid:'.rect',color:WHITE,tf:[loc,sq(hd)]});
+      const loc=locCh('head'),sq=d=>`<scale value="${f6(d/sdiv)},${f6(d/sdiv)}"/>`;
+      if(edge>0)items.push({pid:'head',role:'edge',label:'Head edge',sid:'.rect',color:BLACK,tf:[loc,SZ,sq(hd+2*edge)]});
+      items.push({pid:'head',role:'main',label:'Head',sid:'.rect',color:WHITE,tf:[loc,SZ,sq(hd)]});
     }
   }
   if(o.order==='top')items.reverse();
@@ -346,7 +357,7 @@ function parseScene(xml){
   for(const m of xml.matchAll(/<shape\b([^>]*)>([\s\S]*?)<\/shape>/g)){
     const L={id:attr(m[1],'id'),label:attr(m[1],'label'),start:+attr(m[1],'startTime'),end:+attr(m[1],'endTime'),shape:attr(m[1],'s'),ch:{}};
     L.color=(m[2].match(/<fillColor value="([^"]*)"/)||[])[1];
-    for(const tag of['location','scale','rotation']){
+    for(const tag of['location','scale','rotation','size']){
       const st=m[2].match(new RegExp(`<${tag}\\s+value="([^"]*)"\\s*/>`));
       if(st){L.ch[tag]={v:st[1].split(',').map(Number)};continue}
       const kb=m[2].match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`));
@@ -381,7 +392,7 @@ function check2(M,em,dyn){
   const maxT=o.tmode==='frac'?1.0001:M.dur+.001;
   P.layers.forEach((L,li)=>{
     if(seen.has(L.id)||+L.id!==li+1)bad.ids++;seen.add(L.id);
-    if(!L.ch.location||!L.ch.scale)bad.num++;
+    if(!L.ch.location||!L.ch.scale||!L.ch.size)bad.num++;
     for(const tag in L.ch){const c=L.ch[tag],vs=c.v?[c.v]:c.kfs.map(q=>q.v);
       for(const v of vs)if(!v.length||!v.every(Number.isFinite))bad.num++;
       if(tag==='scale')for(const v of vs)if(!(v[0]>0&&v[1]>0))bad.scale++;
@@ -399,7 +410,8 @@ function check2(M,em,dyn){
   const lay=P.layers.map((L,li)=>({L,meta:em.items[li]||{}}));
   const geomAt=i=>lay.map(({L,meta})=>{
     const loc=evalCh(L.ch.location,i,o,toF),sc=evalCh(L.ch.scale,i,o,toF),rot=L.ch.rotation?evalCh(L.ch.rotation,i,o,toF)[0]:0;
-    return{pid:meta.pid,role:meta.role,cx:loc[0],cy:loc[1],w:sc[0]*100,h:sc[1]*100,ang:sgn*rot,color:L.color};
+    const sz=L.ch.size?evalCh(L.ch.size,i,o,toF):[50,50]; // 50 = this file's own convention if a shape somehow lacks the tag
+    return{pid:meta.pid,role:meta.role,cx:loc[0],cy:loc[1],w:2*sz[0]*sc[0],h:2*sz[1]*sc[1],ang:sgn*rot,color:L.color};
   });
   const segsAt=i=>geomAt(i).filter(g=>g.role==='main'&&g.pid).map(g=>{
     if(stick&&g.pid==='head')return mkSeg(g.pid,g.cx,g.cy,0,1,0,g.w/2*1.1);
@@ -446,16 +458,19 @@ export function buildCalibration(o){
     <fillColor value="${color}"/>
   </shape>`;
   const mv=(y,k)=>`<location>\n        ${k.map(([t,x,e])=>`<kf t="${t}" v="${x}.000000,${y}.000000,0.000000"${e?` e="${e}"`:''}/>`).join('\n        ')}\n      </location>`;
-  const sc='\n      <scale value="1.200000,1.200000"/>';
+  const szVal=(Number.isFinite(+o.size)&&+o.size>0)?+o.size:50,szTag=`<size value="${f6(szVal)},${f6(szVal)}"/>`;
+  const sc=`\n      ${szTag}\n      <scale value="1.200000,1.200000"/>`;
+  const sizeScale=(880/(2*szVal)).toFixed(6); // bar width = 2 × szVal × scale, aimed at 880px of the 1080 canvas
   const layers=[
     mk(1,'TIME A - fraction mode: must ARRIVE at right edge exactly when clip ENDS','#FF3DE8FF',mv(200,[['0.000000000',160],['1.000000000',920]]),sc),
     mk(2,'TIME B - seconds mode: must ARRIVE at right edge exactly when clip ENDS','#FFFF8A4C',mv(380,[['0.000000000',160],['4.000000000',920]]),sc),
     mk(3,'EASE arrive-key: sits almost still in first half, then rushes (= easing is on ARRIVING key)','#FFFC01E6',mv(560,[[tt(0),160],[tt(.5),540,'cubicBezier 0.9 0 1 0.1'],[tt(1),920]]),sc),
     mk(4,'EASE depart-key: control, easing placed on DEPARTING key','#FF3DFFA6',mv(740,[[tt(0),160,'cubicBezier 0.9 0 1 0.1'],[tt(.5),540],[tt(1),920]]),sc),
-    mk(5,'ROTATION - bar must turn CLOCKWISE and point DOWN at the end','#FFFFE45E',`<location value="540.000000,900.000000,0.000000"/>`,`\n      <scale value="2.500000,0.300000"/>\n      <rotation>\n        <kf t="${tt(0)}" v="0.000000"/>\n        <kf t="${tt(1)}" v="90.000000"/>\n      </rotation>`),
+    mk(5,'ROTATION - bar must turn CLOCKWISE and point DOWN at the end','#FFFFE45E',`<location value="540.000000,900.000000,0.000000"/>`,`\n      ${szTag}\n      <scale value="2.500000,0.300000"/>\n      <rotation>\n        <kf t="${tt(0)}" v="0.000000"/>\n        <kf t="${tt(1)}" v="90.000000"/>\n      </rotation>`),
     mk(6,'HEAD - must be a white SQUARE (same shape as the bars)','#FFFFFFFF',`<location value="160.000000,950.000000,0.000000"/>`,sc),
     mk(7,'ORDER first in file - RED square','#FFFF2D2D',`<location value="780.000000,950.000000,0.000000"/>`,sc),
-    mk(8,'ORDER second in file - BLUE square: if BLUE covers RED then first layer = bottom, if RED covers BLUE set "First layer = top"','#FF2D6BFF',`<location value="830.000000,985.000000,0.000000"/>`,sc)
+    mk(8,'ORDER second in file - BLUE square: if BLUE covers RED then first layer = bottom, if RED covers BLUE set "First layer = top"','#FF2D6BFF',`<location value="830.000000,985.000000,0.000000"/>`,sc),
+    mk(9,'SIZE - this bar must reach almost edge to edge (880 of 1080 px). If it stops well short (eg. around the middle), raise "Shape size" in Compatibility until it does','#FF8AFF3D',`<location value="540.000000,80.000000,0.000000"/>`,`\n      ${szTag}\n      <scale value="${sizeScale},0.300000"/>`)
   ].join('\n');
   // note: layers 1,3,4 are fraction-mode; layer 2 is seconds-mode. The scene stays valid either way, the wrong one simply overshoots.
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -469,12 +484,12 @@ ${layers}
 export function initAlight(c){
   const $=c.$,st=c.st,LS='vid2anim.alight';
   if(['amXml','amCal','amShare','amMsg'].some(i=>!$(i))){console.warn('Alight panel not found in index.html, export disabled');return}
-  const F=['amLong','amBg','amThick','amTime','amEase','amDense','amFps','amInv','amStyle','amEdge','amHead','amOrder','amSkip'].filter(i=>$(i));
+  const F=['amLong','amBg','amThick','amTime','amEase','amDense','amFps','amInv','amStyle','amEdge','amHead','amOrder','amSkip','amSize'].filter(i=>$(i));
   const get=i=>!$(i)?undefined:$(i).type==='checkbox'?$(i).checked:$(i).value;
   try{const s=JSON.parse(localStorage.getItem(LS)||'{}');for(const i of F)if(i in s&&$(i)){if($(i).type==='checkbox')$(i).checked=s[i];else $(i).value=s[i]}}catch{}
   const save=()=>{try{localStorage.setItem(LS,JSON.stringify(Object.fromEntries(F.map(i=>[i,get(i)]))))}catch{}};
   for(const i of F)$(i).addEventListener('change',save);
-  const opts=()=>({long:+get('amLong'),bg:get('amBg'),thick:+get('amThick')||100,tmode:get('amTime'),easeOn:get('amEase'),dense:get('amDense')==='dense',fps:get('amFps'),inv:get('amInv'),style:get('amStyle')||'stick',edge:$('amEdge')?+get('amEdge'):2,headPct:+get('amHead')||100,order:get('amOrder')||'bottom',title:c.title()});
+  const opts=()=>({long:+get('amLong'),bg:get('amBg'),thick:+get('amThick')||100,tmode:get('amTime'),easeOn:get('amEase'),dense:get('amDense')==='dense',fps:get('amFps'),inv:get('amInv'),style:get('amStyle')||'stick',edge:$('amEdge')?+get('amEdge'):2,headPct:+get('amHead')||100,order:get('amOrder')||'bottom',size:$('amSize')?+get('amSize')||50:50,title:c.title()});
   const safe=s=>(s||'vid2anim').replace(/\.[^.]+$/,'').replace(/[^\w\- ]+/g,'_').slice(0,40)||'vid2anim';
   const msg=t=>{$('amMsg').textContent=t;st(t)};
   // adjustments made in the review (auto-fix switch, parts moved by hand, parts left out); reset when a different analysis is loaded
@@ -487,7 +502,7 @@ export function initAlight(c){
       if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:r.name});msg('Shared.')}else{c.dl(r.name,r.xml,'application/xml');msg('This browser cannot share files, so the file was downloaded instead.')}}catch(e){if(e.name!=='AbortError')msg(e.message)}};
   const hasReview=['amRev','amRCv','amRDl','amROk'].every(i=>$(i));
   // ---- review dialog (checks 1 + 2 results, preview, fixes, manual check 3)
-  const R={r:null,frame:0,act:'dl',timer:0};
+  const R={r:null,frame:0,act:'dl',timer:0,bakedMove:{}};
   const part=()=>$('amRPart').value;
   const cvDraw=()=>{
     const r=R.r;if(!r)return;const g=r.r2,cv=$('amRCv'),W=Math.max(200,Math.min(560,($('amRCv').parentElement.clientWidth||400)-4)),sc=W/g.cw,H=Math.round(g.ch*sc);
@@ -496,9 +511,15 @@ export function initAlight(c){
     x.fillStyle='#'+bg.slice(3);x.globalAlpha=al/255||0.0;x.fillRect(0,0,W,H);x.globalAlpha=1;
     const hit=g.hitsAt(R.frame),lay=g.geomAt(R.frame);if(opts().order==='top')lay.reverse();
     const col=s=>{const a=parseInt(s.slice(1,3),16)/255,r=parseInt(s.slice(3,5),16),gg=parseInt(s.slice(5,7),16),b=parseInt(s.slice(7,9),16);return`rgba(${r},${gg},${b},${a})`};
-    for(const L of lay){x.save();x.translate(L.cx*sc,L.cy*sc);x.rotate(L.ang*Math.PI/180);
+    const sel=part();
+    for(const L of lay){
+      // the full recompute (evaluate) is debounced, so a move you're still dragging may not be baked into L.cx/cy yet —
+      // draw the not-yet-applied part of the current nudge live, on top of the last computed position
+      const cm=adj.move[L.pid]||[0,0],bm=R.bakedMove[L.pid]||[0,0],ex=cm[0]-bm[0],ey=cm[1]-bm[1];
+      x.save();x.translate((L.cx+ex)*sc,(L.cy+ey)*sc);x.rotate(L.ang*Math.PI/180);
       x.fillStyle=col(L.color);x.fillRect(-L.w*sc/2,-L.h*sc/2,L.w*sc,L.h*sc);
       if(L.role==='main'&&hit.has(L.pid)){x.strokeStyle='#ff2d55';x.lineWidth=2;x.strokeRect(-L.w*sc/2-1,-L.h*sc/2-1,L.w*sc+2,L.h*sc+2)}
+      if(L.role==='main'&&L.pid===sel){x.strokeStyle='#3de8ff';x.lineWidth=2;x.strokeRect(-L.w*sc/2-3,-L.h*sc/2-3,L.w*sc+6,L.h*sc+6)}
       x.restore()}
     $('amRTi').textContent=`frame ${R.frame} / ${c.n()-1} · ${hit.size?hit.size+' parts overlapping here':'no overlaps in this frame'}`;
   };
@@ -528,7 +549,7 @@ export function initAlight(c){
   const sync=()=>{const ok=$('amROk').checked,r=R.r;$('amRDl').disabled=$('amRSh').disabled=!ok;
     $('amRDl').textContent=r&&r.ok?'Download .xml':'Download anyway';$('amRSh').textContent=r&&r.ok?'Share file…':'Share anyway…'};
   const refresh=(keepFrame)=>{
-    try{const o=opts(),r=evaluate(c,o,adj);R.r={...r,name:safe(o.title)+'_alight.xml'};
+    try{const o=opts(),r=evaluate(c,o,adj);R.r={...r,name:safe(o.title)+'_alight.xml'};R.bakedMove={...adj.move};
       const n=c.n(),wf=r.r2.worstFrame>=0?r.r2.worstFrame:r.r1.worstFrame>=0?r.r1.worstFrame:n>>1;
       if(!keepFrame)R.frame=Math.max(0,Math.min(n-1,wf));$('amRT').max=n-1;$('amRT').value=R.frame;buildParts();paint();cvDraw()}
     catch(e){msg(e.message);closeRev()}
@@ -542,8 +563,8 @@ export function initAlight(c){
     $('amRWorst').onclick=()=>{const r=R.r;if(!r)return;const f=r.r2.worstFrame>=0?r.r2.worstFrame:r.r1.worstFrame;if(f>=0){R.frame=f;$('amRT').value=f;cvDraw()}};
     $('amRAuto').onclick=()=>{adj.auto=!adj.auto;refresh(true)};
     $('amRMax').onchange=()=>{adj.max=Math.max(0,+$('amRMax').value||0);if(adj.auto)refresh(true)};
-    $('amRPart').onchange=loadPart;
-    const setMove=()=>{const id=part(),dx=+$('amRDx').value||0,dy=+$('amRDy').value||0;if(dx||dy)adj.move[id]=[dx,dy];else delete adj.move[id];later()};
+    $('amRPart').onchange=()=>{loadPart();cvDraw()};
+    const setMove=()=>{const id=part(),dx=+$('amRDx').value||0,dy=+$('amRDy').value||0;if(dx||dy)adj.move[id]=[dx,dy];else delete adj.move[id];cvDraw();later()};
     $('amRDx').oninput=$('amRDy').oninput=setMove;
     for(const[i,dx,dy]of[['amRL',-2,0],['amRR',2,0],['amRU',0,-2],['amRD',0,2]])$(i).onclick=()=>{$('amRDx').value=(+$('amRDx').value||0)+dx;$('amRDy').value=(+$('amRDy').value||0)+dy;setMove()};
     $('amRHide').onchange=()=>{const id=part();if($('amRHide').checked)adj.hide.add(id);else adj.hide.delete(id);refresh(true)};
