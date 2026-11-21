@@ -60,6 +60,7 @@ on('open', 'click', 'Session opened');
 on('csv', 'click', 'Exported CSV');
 on('json', 'click', 'Exported JSON');
 on('sheet', 'click', 'Reference sheet');
+on('bgCap', 'click', 'Background capture');
 on('amXml', 'click', 'Alight export');
 on('amShare', 'click', 'Alight export');
 
