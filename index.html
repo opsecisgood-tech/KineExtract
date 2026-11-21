@@ -74,6 +74,13 @@
 <div class="row"><input id="t0" type="number" step="0.01" value="0" title="start s"><input id="t1" type="number" step="0.01" value="0" title="end s"></div>
 <div class="row"><button id="setA">Start=now</button><button id="setB">End=now</button><button id="prevClip">Preview</button></div>
 <select id="fps"><option>10</option><option selected>15</option><option>24</option><option>30</option></select><small>Lower FPS is faster but can miss fast motion.</small></details>
+<details open><summary>Background rebuild (AI)</summary>
+<label><input id="bgOn" type="checkbox"> Rebuild the background (loads the AI person-removal tool)</label>
+<label>Mode<select id="bgMode"><option value="static" selected>Static: the camera stays put</option><option value="moving">Moving: the camera pans or shakes</option></select></label>
+<label>Rebuild every (frames)<input id="bgEvery" type="number" min="1" max="120" step="1" value="8"></label>
+<div class="row"><button id="bgCap">Capture background now</button><button id="bgClr">Clear</button></div>
+<small id="bgMsg">Off. Tick the box and the background is rebuilt right after every Analyze, and added to the Alight export.</small>
+<small>The AI cuts the tracked person out of every Nth frame. What they were standing in front of is filled in from other moments where it was visible, so you get a clean background without them. <b>Static</b> uses a wide time window (tripod shots). <b>Moving</b> uses a short window and follows the camera movement measured by the camera-shake compensation in the Scan settings above, so keep that ticked. The Low / Mid / High setting for how detailed the background is lives in the Alight Motion export section (Export tab).</small></details>
 </div>
 
 <div class="tab" data-tab="subj" hidden>
@@ -117,12 +124,15 @@
 <label>Line thickness %<input id="amThick" type="number" min="20" max="400" value="100"></label>
 <label>Black edge thickness (px on a 1080 canvas)<input id="amEdge" type="number" min="0" max="20" step=".5" value="2"></label>
 <label>Head size %<input id="amHead" type="number" min="30" max="300" value="100"></label>
+<label>Background quality (how many parts)<select id="amBgQ"><option value="low">Low: 8 columns</option><option value="mid" selected>Mid: 16 columns</option><option value="high">High: 32 columns</option></select></label>
+<small id="amBgInfo"></small>
 <label>Project fps<select id="amFps"><option value="match" selected>Match analysis (30 if unsupported)</option><option>24</option><option>30</option><option>60</option></select></label>
 <label>Keyframes<select id="amDense"><option value="kf" selected>As in the graphs (editable in Alight)</option><option value="dense">Every frame (exact, large file)</option></select></label>
 <details><summary>Compatibility</summary>
 <small>The Alight XML format is community-documented, not official. Import the calibration project (button below) and set these two to whatever behaves as the layer names say.</small>
 <label>Keyframe time unit<select id="amTime"><option value="frac" selected>Fraction of layer length</option><option value="sec">Seconds from layer start</option></select></label>
 <label>Easing stored on<select id="amEase"><option value="arrive" selected>Arriving keyframe</option><option value="depart">Departing keyframe</option></select></label>
+<label>Background colour animation<select id="amBgAnim"><option value="kf" selected>Colour keyframes (animated)</option><option value="fixed">Fixed colours (first capture only)</option></select></label>
 <label><input id="amInv" type="checkbox"> Invert rotation direction</label>
 <label>Layer order in the file<select id="amOrder"><option value="bottom" selected>First layer = bottom</option><option value="top">First layer = top</option></select></label>
 <label>Shape size (half-extent, advanced)<input id="amSize" type="number" min="1" max="500" step="1" value="100"></label>
@@ -145,7 +155,7 @@
 <label><input id="loop" type="checkbox"> Loop</label><span id="tinfo"></span></div>
 <input id="scrub" type="range" min="0" max="1" step="0.001" value="0">
 <div class="row ctl"><label><input id="corr" type="checkbox"> Correct landmarks (drag points)</label><label>spread ±<input id="rad" type="number" value="0" style="width:46px"> frames</label><button id="undo">Undo</button><button id="redo">Redo</button></div>
-<div class="row ctl"><label><input id="pvon" type="checkbox"> Rig preview</label><select id="pvm"><option value="seg">Segments</option><option value="skel">Skeleton</option></select><select id="pvs"><option value="data">from smoothed data</option><option value="kf">from keyframes (eased)</option></select><label><input id="pvbg" type="checkbox"> video bg</label></div></section>
+<div class="row ctl"><label><input id="pvon" type="checkbox"> Rig preview</label><select id="pvm"><option value="seg">Segments</option><option value="skel">Skeleton</option></select><select id="pvs"><option value="data">from smoothed data</option><option value="kf">from keyframes (eased)</option></select><label><input id="pvbg" type="checkbox"> video bg</label><label><input id="pvrb" type="checkbox"> rebuilt bg</label></div></section>
 <aside id="rt"><h4>Selected part</h4><div id="info"></div>
 <h4>Segment easing (selected keyframe → next)</h4>
 <select id="ezs"></select>
@@ -199,4 +209,4 @@
 </div>
 <div class="agh"><label class="amok"><input id="amROk" type="checkbox"> I checked the preview and it looks right (manual check)</label><button id="amRDl" class="go" disabled>Download .xml</button><button id="amRSh" disabled>Share file…</button></div>
 </div>
-<script type="module" src="app.js?v=11"></script><script type="module" src="rovio.js?v=3"></script></body></html>
+<script type="module" src="app.js?v=12"></script><script type="module" src="rovio.js?v=4"></script></body></html>
