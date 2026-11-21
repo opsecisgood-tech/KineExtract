@@ -12,6 +12,14 @@ const NEWS_ID = 'welcome-2026-11-20';
 
 /* ---------- navigation (hash based, so pages can be bookmarked) ---------- */
 let current = 'home';
+// Tools only exist while a project is active: started with New Project (or Open) and ended by Save.
+let active = false;
+const toolsBtn = document.querySelector('.side .nv[data-go="tools"]');
+function setActive(v) {
+  active = v;
+  toolsBtn.hidden = !v;
+  $('pjSave').hidden = !v;
+}
 function show(page, section) {
   if (!PAGES.includes(page)) page = 'home';
   current = page;
@@ -26,6 +34,7 @@ function show(page, section) {
 }
 function route() {
   const h = decodeURIComponent(location.hash.slice(1));
+  if (h === 'tools' && !active) { history.replaceState(null, '', '#home'); return show('home'); }
   if (ABOUT_SECTIONS.includes(h)) return show('about', h);
   show(PAGES.includes(h) ? h : 'home');
 }
@@ -78,7 +87,7 @@ function renderProjects() {
     const d = document.createElement('div');
     d.className = 'empty';
     d.style.gridColumn = '1/-1';
-    d.textContent = q ? 'No projects match your search.' : 'No saved projects yet. Press New Project, load a video, then use Save current session.';
+    d.textContent = q ? 'No projects match your search.' : 'No saved projects yet. Press New Project and load a video. When you are done, save it from the Export tab.';
     grid.append(d);
     return;
   }
@@ -103,24 +112,32 @@ $('pjGrid').addEventListener('click', e => {
     store.set('rovio.favs', [...f]); renderProjects(); refreshStats();
   } else {
     sess.value = n;
-    if (b.dataset.a === 'open') { $('open').click(); go('tools'); }
+    if (b.dataset.a === 'open') {
+      if (active && hasVideo() && !confirm('Open this project? Unsaved changes to the current project will be lost.')) return;
+      $('open').click(); setActive(true); go('tools');
+    }
     else $('del').click();              // the editor asks for confirmation itself
   }
 });
 new MutationObserver(() => { refreshStats(); if (current === 'projects') renderProjects(); }).observe(sess, { childList: true });
 
 /* ---------- new project / save ---------- */
+const hasVideo = () => { const v = $('v'); return !!(v && v.currentSrc); };
 function newProject() {
-  go('tools');
-  const v = $('v');
-  if (v && v.currentSrc && !confirm('Start a new project? Unsaved analysis will be cleared.')) return;
-  if (v && v.currentSrc) $('newS').click();
+  if (active && hasVideo() && !confirm('Start a new project? Unsaved analysis will be cleared.')) return;
+  if (hasVideo()) $('newS').click();   // always start from a clean editor
+  setActive(true);
   note('New project');
+  go('tools');
   $('file').click();
 }
 $('qsNew').onclick = newProject;
 $('pjNew').onclick = newProject;
-$('pjSave').onclick = () => { go('tools'); $('save').click(); };
+$('pjSave').onclick = () => $('save').click();
+// A successful save finishes the project: Tools goes away and the saved project shows in Projects.
+new MutationObserver(() => {
+  if (active && /^(Session saved|Saved without)/.test($('status').textContent)) { setActive(false); go('projects'); }
+}).observe($('status'), { childList: true, characterData: true, subtree: true });
 
 /* ---------- top bar ---------- */
 $('rvq').addEventListener('input', () => { if (current !== 'projects') go('projects'); else renderProjects(); });
@@ -147,6 +164,7 @@ $('stClear').onclick = async () => {
 };
 $('stReset').onclick = () => { store.del('rovio.recent'); store.del('rovio.favs'); refreshStats(); if (current === 'projects') renderProjects(); };
 
+setActive(false);
 route();
 refreshStats();
 setInterval(() => { if (current === 'home') refreshStats(); }, 30000);
