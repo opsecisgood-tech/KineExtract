@@ -7,11 +7,10 @@ const store = {
   del(k) { try { localStorage.removeItem(k); } catch {} }
 };
 const PAGES = ['home', 'projects', 'tools', 'settings', 'about'];
-const ABOUT_SECTIONS = ['privacy', 'terms', 'contact'];
-const NEWS_ID = 'welcome-2026-11-20';
 
 /* ---------- navigation (hash based, so pages can be bookmarked) ---------- */
 let current = 'home';
+let lastPage = 'home';   // where the back arrow in Tools returns to
 // Tools only exist while a project is active: started with New Project (or Open) and ended by Save.
 let active = false;
 const toolsBtn = document.querySelector('.side .nv[data-go="tools"]');
@@ -20,8 +19,9 @@ function setActive(v) {
   toolsBtn.hidden = !v;
   $('pjSave').hidden = !v;
 }
-function show(page, section) {
+function show(page) {
   if (!PAGES.includes(page)) page = 'home';
+  if (page !== 'tools') lastPage = page;
   current = page;
   for (const p of PAGES) $('v-' + p).classList.toggle('on', p === page);
   document.querySelectorAll('.side .nv').forEach(b => b.classList.toggle('on', b.dataset.go === page));
@@ -29,13 +29,11 @@ function show(page, section) {
   if (page === 'projects') renderProjects();
   if (page === 'settings') refreshStorage();
   if (page === 'tools') requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
-  if (section && $(section)) $(section).scrollIntoView({ block: 'start' });
-  else if (page !== 'tools') $('v-' + page).scrollTop = 0;
+  if (page !== 'tools') $('v-' + page).scrollTop = 0;
 }
 function route() {
   const h = decodeURIComponent(location.hash.slice(1));
   if (h === 'tools' && !active) { history.replaceState(null, '', '#home'); return show('home'); }
-  if (ABOUT_SECTIONS.includes(h)) return show('about', h);
   show(PAGES.includes(h) ? h : 'home');
 }
 const go = page => { if (location.hash === '#' + page) route(); else location.hash = page; };
@@ -68,20 +66,15 @@ on('amShare', 'click', 'Alight export');
 /* ---------- projects (mirrors the editor's saved-session list) ---------- */
 const sess = $('sess');
 const names = () => [...sess.options].map(o => o.value || o.text).filter(Boolean);
-const favs = () => new Set(store.get('rovio.favs', []));
 function refreshStats() {
-  const all = names(), f = favs();
-  $('stP').textContent = all.length;
-  $('stF').textContent = all.filter(n => f.has(n)).length;
+  $('stP').textContent = names().length;
   const r = store.get('rovio.recent', null);
   $('stA').textContent = r ? r.label : 'None';
   $('stAt').textContent = r ? ago(r.t) : '';
-  $('rvDot').hidden = store.get('rovio.newsSeen', '') === NEWS_ID;
 }
-const star = '<svg class="ic"><use href="#i-star"/></svg>';
 function renderProjects() {
-  const q = $('rvq').value.trim().toLowerCase(), f = favs(), grid = $('pjGrid');
-  const list = names().filter(n => n.toLowerCase().includes(q)).sort((a, b) => (f.has(b) - f.has(a)) || a.localeCompare(b));
+  const q = $('rvq').value.trim().toLowerCase(), grid = $('pjGrid');
+  const list = names().filter(n => n.toLowerCase().includes(q)).sort((a, b) => a.localeCompare(b));
   grid.textContent = '';
   if (!list.length) {
     const d = document.createElement('div');
@@ -95,9 +88,7 @@ function renderProjects() {
     const c = document.createElement('div'); c.className = 'pj'; c.dataset.n = n;
     const top = document.createElement('div'); top.className = 'top';
     const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = n; nm.title = n;
-    const st = document.createElement('button'); st.className = 'star' + (f.has(n) ? ' on' : ''); st.dataset.a = 'fav'; st.innerHTML = star;
-    st.setAttribute('aria-label', 'Favorite ' + n); st.setAttribute('aria-pressed', f.has(n));
-    top.append(nm, st);
+    top.append(nm);
     const acts = document.createElement('div'); acts.className = 'acts';
     const o = document.createElement('button'); o.className = 'open'; o.dataset.a = 'open'; o.textContent = 'Open';
     const d = document.createElement('button'); d.dataset.a = 'del'; d.textContent = 'Delete';
@@ -107,17 +98,12 @@ function renderProjects() {
 $('pjGrid').addEventListener('click', e => {
   const b = e.target.closest('button[data-a]'); if (!b) return;
   const n = b.closest('.pj').dataset.n;
-  if (b.dataset.a === 'fav') {
-    const f = favs(); f.has(n) ? f.delete(n) : f.add(n);
-    store.set('rovio.favs', [...f]); renderProjects(); refreshStats();
-  } else {
-    sess.value = n;
-    if (b.dataset.a === 'open') {
-      if (active && hasVideo() && !confirm('Open this project? Unsaved changes to the current project will be lost.')) return;
-      $('open').click(); setActive(true); go('tools');
-    }
-    else $('del').click();              // the editor asks for confirmation itself
+  sess.value = n;
+  if (b.dataset.a === 'open') {
+    if (active && hasVideo() && !confirm('Open this project? Unsaved changes to the current project will be lost.')) return;
+    $('open').click(); setActive(true); go('tools');
   }
+  else $('del').click();              // the editor asks for confirmation itself
 });
 new MutationObserver(() => { refreshStats(); if (current === 'projects') renderProjects(); }).observe(sess, { childList: true });
 
@@ -139,13 +125,10 @@ new MutationObserver(() => {
   if (active && /^(Session saved|Saved without)/.test($('status').textContent)) { setActive(false); go('projects'); }
 }).observe($('status'), { childList: true, characterData: true, subtree: true });
 
-/* ---------- top bar ---------- */
+/* ---------- top bar / fullscreen tools ---------- */
 $('rvq').addEventListener('input', () => { if (current !== 'projects') go('projects'); else renderProjects(); });
-$('rvBell').onclick = () => {
-  store.set('rovio.newsSeen', NEWS_ID); refreshStats(); go('home');
-  requestAnimationFrame(() => $('newsBox').scrollIntoView({ behavior: 'smooth', block: 'center' }));
-};
-$('rvUser').onclick = () => go('settings');
+// Tools is fullscreen; the back arrow leaves it at any time. The project stays open (Tools stays in the sidebar).
+$('tlBack').onclick = () => go(lastPage);
 
 /* ---------- settings ---------- */
 const MB = n => (n / 1048576).toFixed(n > 1e8 ? 0 : 1) + ' MB';
@@ -162,7 +145,7 @@ $('stClear').onclick = async () => {
   try { await caches.delete('vid2anim-models'); $('stMsg').textContent = 'Models cleared.'; } catch { $('stMsg').textContent = 'Could not clear the cache in this browser.'; }
   refreshStorage();
 };
-$('stReset').onclick = () => { store.del('rovio.recent'); store.del('rovio.favs'); refreshStats(); if (current === 'projects') renderProjects(); };
+$('stReset').onclick = () => { store.del('rovio.recent'); refreshStats(); if (current === 'projects') renderProjects(); };
 
 setActive(false);
 route();
