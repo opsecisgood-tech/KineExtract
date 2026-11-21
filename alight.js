@@ -1,4 +1,4 @@
-// vid2anim → Alight Motion exporter (.xml project). Default look: white stickman, thin black edge, square head.
+// Rovio → Alight Motion exporter (.xml project). Default look: white stickman, thin black edge, square head.
 // Pure browser, no dependencies. Wired up from app.js with initAlight(ctx).
 //
 // Export pipeline (v6):
@@ -334,7 +334,7 @@ function emit(M,dyn){
     <fillColor value="${it.color}"/>
     ${SZ}
   </shape>`).join('\n');
-  const title=(o.title||'vid2anim').slice(0,60);
+  const title=(o.title||'Rovio').slice(0,60);
   const xml=`<?xml version="1.0" encoding="UTF-8"?>
 <scene title="${esc(title)}" width="${cw}" height="${ch}" exportWidth="${cw}" exportHeight="${ch}" bgcolor="${o.bg}" totalTime="${totalMs}" fps="${projFps}" modifiedTime="${Date.now()}" amver="1028425" ffver="106" am="com.alightcreative.motion/5.0.273.1028425" amplatform="android">
 ${layers}
@@ -467,7 +467,7 @@ export function buildCalibration(o){
   const layers=[
     mk(1,'TIME A - fraction mode: must ARRIVE at right edge exactly when clip ENDS','#FF3DE8FF',mv(200,[['0.000000000',160],['1.000000000',920]]),sc),
     mk(2,'TIME B - seconds mode: must ARRIVE at right edge exactly when clip ENDS','#FFFF8A4C',mv(380,[['0.000000000',160],['4.000000000',920]]),sc),
-    mk(3,'EASE arrive-key: sits almost still in first half, then rushes (= easing is on ARRIVING key)','#FFFC01E6',mv(560,[[tt(0),160],[tt(.5),540,'cubicBezier 0.9 0 1 0.1'],[tt(1),920]]),sc),
+    mk(3,'EASE arrive-key: sits almost still in first half, then rushes (= easing is on ARRIVING key)','#FFFF1226',mv(560,[[tt(0),160],[tt(.5),540,'cubicBezier 0.9 0 1 0.1'],[tt(1),920]]),sc),
     mk(4,'EASE depart-key: control, easing placed on DEPARTING key','#FF3DFFA6',mv(740,[[tt(0),160,'cubicBezier 0.9 0 1 0.1'],[tt(.5),540],[tt(1),920]]),sc),
     mk(5,'ROTATION - bar must turn CLOCKWISE and point DOWN at the end','#FFFFE45E',`<location value="540.000000,900.000000,0.000000"/>`,`\n      <scale value="2.500000,0.300000"/>\n      <rotation>\n        <kf t="${tt(0)}" v="0.000000"/>\n        <kf t="${tt(1)}" v="90.000000"/>\n      </rotation>`),
     mk(6,'HEAD - must be a white SQUARE (same shape as the bars)','#FFFFFFFF',`<location value="160.000000,950.000000,0.000000"/>`,sc),
@@ -477,7 +477,7 @@ export function buildCalibration(o){
   ].join('\n');
   // note: layers 1,3,4 are fraction-mode; layer 2 is seconds-mode. The scene stays valid either way, the wrong one simply overshoots.
   return `<?xml version="1.0" encoding="UTF-8"?>
-<scene title="vid2anim calibration" width="1080" height="1080" exportWidth="1080" exportHeight="1080" bgcolor="#FF0D0F24" totalTime="${totalMs}" fps="30" modifiedTime="${Date.now()}" amver="1028425" ffver="106" am="com.alightcreative.motion/5.0.273.1028425" amplatform="android">
+<scene title="Rovio calibration" width="1080" height="1080" exportWidth="1080" exportHeight="1080" bgcolor="#FF121214" totalTime="${totalMs}" fps="30" modifiedTime="${Date.now()}" amver="1028425" ffver="106" am="com.alightcreative.motion/5.0.273.1028425" amplatform="android">
 ${layers}
 </scene>
 `;
@@ -493,7 +493,7 @@ export function initAlight(c){
   const save=()=>{try{localStorage.setItem(LS,JSON.stringify(Object.fromEntries(F.map(i=>[i,get(i)]))))}catch{}};
   for(const i of F)$(i).addEventListener('change',save);
   const opts=()=>({long:+get('amLong'),bg:get('amBg'),thick:+get('amThick')||100,tmode:get('amTime'),easeOn:get('amEase'),dense:get('amDense')==='dense',fps:get('amFps'),inv:get('amInv'),style:get('amStyle')||'stick',edge:$('amEdge')?+get('amEdge'):2,headPct:+get('amHead')||100,order:get('amOrder')||'bottom',size:$('amSize')?+get('amSize')||100:100,title:c.title()});
-  const safe=s=>(s||'vid2anim').replace(/\.[^.]+$/,'').replace(/[^\w\- ]+/g,'_').slice(0,40)||'vid2anim';
+  const safe=s=>(s||'Rovio').replace(/\.[^.]+$/,'').replace(/[^\w\- ]+/g,'_').slice(0,40)||'Rovio';
   const msg=t=>{$('amMsg').textContent=t;st(t)};
   // adjustments made in the review (auto-fix switch, parts moved by hand, parts left out); reset when a different analysis is loaded
   let adj={auto:false,max:40,hide:new Set(),move:{}},adjKey='';
@@ -510,7 +510,7 @@ export function initAlight(c){
   const cvDraw=()=>{
     const r=R.r;if(!r)return;const g=r.r2,cv=$('amRCv'),W=Math.max(200,Math.min(560,($('amRCv').parentElement.clientWidth||400)-4)),sc=W/g.cw,H=Math.round(g.ch*sc);
     cv.width=W;cv.height=H;const x=cv.getContext('2d');
-    x.fillStyle='#14172c';x.fillRect(0,0,W,H);const bg=opts().bg,al=parseInt(bg.slice(1,3),16);
+    x.fillStyle='#0e0e10';x.fillRect(0,0,W,H);const bg=opts().bg,al=parseInt(bg.slice(1,3),16);
     x.fillStyle='#'+bg.slice(3);x.globalAlpha=al/255||0.0;x.fillRect(0,0,W,H);x.globalAlpha=1;
     const hit=g.hitsAt(R.frame),lay=g.geomAt(R.frame);if(opts().order==='top')lay.reverse();
     const col=s=>{const a=parseInt(s.slice(1,3),16)/255,r=parseInt(s.slice(3,5),16),gg=parseInt(s.slice(5,7),16),b=parseInt(s.slice(7,9),16);return`rgba(${r},${gg},${b},${a})`};
@@ -589,5 +589,5 @@ export function initAlight(c){
   };
   $('amXml').onclick=()=>go('dl');
   $('amShare').onclick=()=>go('share');
-  $('amCal').onclick=()=>{c.dl('vid2anim_calibration.xml',buildCalibration(opts()),'application/xml');msg('Calibration project saved. Import it in Alight Motion and follow the layer names.')};
+  $('amCal').onclick=()=>{c.dl('rovio_calibration.xml',buildCalibration(opts()),'application/xml');msg('Calibration project saved. Import it in Alight Motion and follow the layer names.')};
 }
