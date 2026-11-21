@@ -67,10 +67,10 @@
 <details open><summary>Data export</summary><select id="xs"><option value="all-kf">CSV: all parts, keyframes</option><option value="sel-kf">CSV: selected part, keyframes</option><option value="sel-all">CSV: selected part, all frames</option><option value="all-all">CSV: all parts, all frames</option></select>
 <div class="row"><button id="csv">CSV</button><button id="json">JSON</button></div><div class="row"><button id="sheet">Reference sheet</button><button id="gpng">Graph PNG</button></div></details>
 <details open><summary>Alight Motion export</summary>
-<small>Builds a real Alight Motion project (.xml): one layer per body part with position, length and rotation keyframes, eased like your graphs. Time 0 = start of the clip, so drop your video under it at the same start.</small>
+<small>Builds a real Alight Motion project (.xml): one layer per body part with position, length and rotation keyframes, eased like your graphs. Time 0 = start of the clip, so drop your video under it at the same start. Before saving, two automatic checks look for parts that overlap where they should not, then you confirm the preview yourself.</small>
 <label>Canvas long side (px)<select id="amLong"><option>720</option><option selected>1080</option><option>1440</option><option>1920</option></select></label>
 <label>Background<select id="amBg"><option value="#FF0D0F24" selected>Deep navy</option><option value="#FF000000">Black</option><option value="#FFFFFFFF">White</option><option value="#FFD8D8D8">Light grey</option><option value="#00000000">Transparent</option></select></label>
-<label>Rig look<select id="amStyle"><option value="stick" selected>Stickman: white lines, thin black edge, round head</option><option value="classic">Classic: coloured bars (cyan / orange)</option></select></label>
+<label>Rig look<select id="amStyle"><option value="stick" selected>Stickman: white lines, thin black edge, square head</option><option value="classic">Classic: coloured bars (cyan / orange)</option></select></label>
 <label>Line thickness %<input id="amThick" type="number" min="20" max="400" value="100"></label>
 <label>Black edge thickness (px on a 1080 canvas)<input id="amEdge" type="number" min="0" max="20" step=".5" value="2"></label>
 <label>Head size %<input id="amHead" type="number" min="30" max="300" value="100"></label>
@@ -81,10 +81,10 @@
 <label>Keyframe time unit<select id="amTime"><option value="frac" selected>Fraction of layer length</option><option value="sec">Seconds from layer start</option></select></label>
 <label>Easing stored on<select id="amEase"><option value="arrive" selected>Arriving keyframe</option><option value="depart">Departing keyframe</option></select></label>
 <label><input id="amInv" type="checkbox"> Invert rotation direction</label>
-<label>Round shape id (head)<input id="amRound" type="text" value=".ellipse" spellcheck="false" autocapitalize="off"></label>
 <label>Layer order in the file<select id="amOrder"><option value="bottom" selected>First layer = bottom</option><option value="top">First layer = top</option></select></label></details>
+<label><input id="amSkip" type="checkbox"> Skip the review when both automatic checks pass</label>
 <button id="amCal">Calibration project (.xml)</button>
-<div class="row"><button id="amXml" class="go">Download .xml</button><button id="amShare">Share file…</button></div>
+<div class="row"><button id="amXml" class="go">Check &amp; download .xml</button><button id="amShare">Check &amp; share…</button></div>
 <small id="amMsg"></small></details>
 <details open><summary>Project &amp; sessions</summary><select id="sess"></select>
 <div class="row"><button id="open">Open</button><button id="save">Save session</button></div>
@@ -114,4 +114,31 @@
 <label><input id="rawc" type="checkbox" checked> Raw</label><small id="gmsg">Wheel/＋－ zoom · drag pan · click seek · drag ◇ keyframes to edit · hover for values</small></div>
 <div id="gw"><canvas id="graph"></canvas></div></footer>
 <div id="ag" hidden><div class="agh"><b>All parts</b><select id="agp"></select><small>Click a part to select it · double-click to close · green diamonds = keyframes</small><button id="agpng">Save PNG</button><button id="agx">Close</button></div><div id="agg"></div></div>
-<script type="module" src="app.js?v=7"></script></body></html>
+<div id="amRev" hidden role="dialog" aria-label="Alight export check">
+<div class="agh"><b>Alight export check</b><small id="amRSub"></small><button id="amRX">Close</button></div>
+<div id="amRb">
+<div id="amRl">
+<ol id="amRChk">
+<li id="amRC1"><b>Check 1 · analysed layout</b><span></span><details><summary>Show problems</summary><div id="amRI1" class="amri"></div></details></li>
+<li id="amRC2"><b>Check 2 · finished .xml</b><span></span><details><summary>Show problems</summary><div id="amRI2" class="amri"></div></details></li>
+<li class="man"><b>Check 3 · you</b><span>Scrub the preview. Red outlines are overlapping parts. Tick the box at the bottom when it looks right.</span></li>
+</ol>
+<h4>Fix overlaps</h4>
+<div class="row"><button id="amRAuto" class="go">Auto-fix overlaps</button></div>
+<label>Largest move allowed (px on a 1080 canvas)<input id="amRMax" type="number" min="0" max="400" step="5" value="40"></label>
+<small id="amRAutoMsg"></small>
+<details open><summary>Move parts yourself</summary>
+<label>Part<select id="amRPart"></select></label>
+<div class="row"><input id="amRDx" type="number" step="1" value="0" aria-label="Move right (px)" title="Right (+) / left (-) in px"><input id="amRDy" type="number" step="1" value="0" aria-label="Move down (px)" title="Down (+) / up (-) in px"></div>
+<div class="row"><button id="amRL" title="Left">←</button><button id="amRU" title="Up">↑</button><button id="amRD" title="Down">↓</button><button id="amRR" title="Right">→</button></div>
+<label><input id="amRHide" type="checkbox"> Leave this part out of the file</label>
+<small>Moves are in px on a 1080 canvas and keep the part in place for the whole clip.</small>
+<div class="row"><button id="amRReset">Reset all fixes</button></div></details>
+</div>
+<div id="amRp"><canvas id="amRCv" width="400" height="300"></canvas>
+<div class="row"><input id="amRT" type="range" min="0" max="0" value="0" aria-label="Preview frame"><button id="amRWorst">Worst frame</button></div>
+<small id="amRTi"></small></div>
+</div>
+<div class="agh"><label class="amok"><input id="amROk" type="checkbox"> I checked the preview and it looks right (manual check)</label><button id="amRDl" class="go" disabled>Download .xml</button><button id="amRSh" disabled>Share file…</button></div>
+</div>
+<script type="module" src="app.js?v=8"></script></body></html>
