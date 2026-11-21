@@ -203,3 +203,6 @@ h1.pt{margin:0 0 4px;font:700 28px/1.15 var(--ui);letter-spacing:.2px}
 input[type=checkbox],input[type=range],progress{accent-color:var(--mag)}
 .pd a{text-decoration:none}.pd a:hover{text-decoration:underline}
 .qs .mark{right:26%;width:30%;max-width:230px}
+
+.side .nv[hidden]{display:none}
+.bar button[hidden]{display:none}
