@@ -53,3 +53,18 @@ aside #tabs button.on{background:linear-gradient(135deg,var(--mag),#a600d6);bord
 .tab[hidden]{display:none}
 .vtools{margin:0 0 8px;padding:5px 6px;border:1px solid var(--line);border-radius:8px;background:#141730}.vtools b{color:var(--mag-hi);font-size:12px;margin-right:4px}
 .vtools button{flex:0 1 auto;padding:4px 12px}
+
+/* ---- Alight export review ---- */
+#amRev{position:fixed;inset:0;z-index:60;background:var(--deep);display:flex;flex-direction:column}#amRev[hidden]{display:none}
+#amRb{flex:1;min-height:0;display:flex;overflow:hidden}
+#amRl{width:340px;max-width:45vw;overflow:auto;padding:10px;background:#141730d9;border-right:1px solid var(--line)}
+#amRl select,#amRl input[type=number],#amRl button{width:100%;margin:2px 0}#amRl label{display:block;margin:5px 0}#amRl input[type=checkbox]{width:auto;accent-color:var(--mag)}
+#amRp{flex:1;min-width:0;overflow:auto;padding:10px}#amRCv{display:block;max-width:100%;border:1px solid var(--line);border-radius:4px;background:#000;box-shadow:0 0 28px #fc01e61f}
+#amRp .row{margin:8px 0}#amRT{flex:1;min-width:0;accent-color:var(--mag)}#amRWorst{flex:0 0 auto}#amRTi{font:12px var(--num);color:var(--cy)}
+#amRChk{list-style:none;margin:0 0 8px;padding:0}#amRChk li{border:1px solid var(--line);border-left-width:4px;border-radius:6px;background:var(--panel);padding:6px 8px;margin-bottom:6px}
+#amRChk li b{display:block;font-size:12px}#amRChk li span{display:block;color:var(--mu);font-size:11px;margin-top:2px}
+#amRChk li.ok{border-left-color:var(--ok)}#amRChk li.ok span{color:var(--ok)}#amRChk li.bad{border-left-color:#ff2d55}#amRChk li.bad span{color:#ff8aa0}#amRChk li.man{border-left-color:var(--cy)}
+#amRChk details{margin:4px 0 0;background:var(--deep)}.amri button{display:block;width:100%;text-align:left;font-size:11px;padding:2px 8px;margin:2px 0}
+.amok{display:flex;gap:6px;align-items:center;flex:1 1 260px;margin:0}.amok input{accent-color:var(--mag)}
+#amRev .agh button.go{padding:6px 18px}
+@media(max-width:900px){#amRb{flex-direction:column;overflow:auto}#amRl{width:auto;max-width:none;border-right:0;border-bottom:1px solid var(--line);overflow:visible}#amRp{overflow:visible}}
