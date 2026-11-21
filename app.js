@@ -1,8 +1,9 @@
 import {PoseLandmarker,FilesetResolver} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
-import {initAlight} from './alight.js?v=8';
+import {initAlight} from './alight.js?v=9';
+import {initBG} from './bg.js?v=1';
 const $=i=>document.getElementById(i),V=$('v'),O=$('ov'),ox=O.getContext('2d'),G=$('graph'),EC=$('ezc'),ec=EC.getContext('2d'),PV=$('pv'),pc=PV.getContext('2d'),crop=document.createElement('canvas'),cx=crop.getContext('2d');
 const WASM="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm",MURL=m=>`https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_${m}/float16/1/pose_landmarker_${m}.task`;
-let fs,delegate='GPU',LMs={},tsBase=0,frames=[],EF=[],R={},RF={},S={},K={},CORR=[],undo=[],redo=[],sel='head',prop='rot',selKf=-1,stop=false,view=[0,1],fps=15,start=0,dirty=true,endAt=null,lastT=-1,meta={},curFile=null,subj=null,picking=false,hov=null,rep={},lasso=null,lp=[],lassoing=false,drawingL=false,anchor=null,vel={x:0,y:0},BR=null,seed=null,ident=null,pickC=[],pickT=-1,lastPx=null;
+let BGAPI=null,fs,delegate='GPU',LMs={},tsBase=0,frames=[],EF=[],R={},RF={},S={},K={},CORR=[],undo=[],redo=[],sel='head',prop='rot',selKf=-1,stop=false,view=[0,1],fps=15,start=0,dirty=true,endAt=null,lastT=-1,meta={},curFile=null,subj=null,picking=false,hov=null,rep={},lasso=null,lp=[],lassoing=false,drawingL=false,anchor=null,vel={x:0,y:0},BR=null,seed=null,ident=null,pickC=[],pickT=-1,lastPx=null;
 const C={L:'#3de8ff',R:'#ff8a4c',N:'#c4c4cc',sel:'#ffe45e',brand:'#ff1226',ok:'#3dffa6'};
 const KP=['rot','x','y','jt','len'],PROPS={rot:'Rotation °',x:'Position X',y:'Position Y',jt:'Joint angle °',len:'Segment length',vrot:'Angular velocity °/s (read-only)',vpos:'Position velocity /s (read-only)'};
 $('prop').innerHTML=Object.entries(PROPS).map(([k,v])=>`<option value=${k}>${v}</option>`).join('');
@@ -350,7 +351,7 @@ async function analyze(){if(!V.src)return st('Load a video first.');picking=fals
  stop=false;V.pause();fps=+$('fps').value;start=+$('t0').value||0;const end=Math.min(+$('t1').value||V.duration,V.duration),n=Math.floor((end-start)*fps)+1;if(n<2)return st('Clip too short.');
  const lvl=$('smart').checked?$('thr').value:'off',rounds={off:0,fast:0,care:1,max:2}[lvl];
  if(engine()==='dw'){$('analyze').disabled=true;try{await ensureDW();st('Advanced tracker ready ('+dwEP+').')}catch(e){console.error(e);$('analyze').disabled=false;$('eng').value='mp';return st('Advanced tracker could not load ('+e.message+'). It needs internet access to download its models. Switched to MediaPipe: press Analyze to continue with that.')}}
- $('analyze').disabled=true;$('cancel').disabled=false;frames=[];CORR=[];undo=[];redo=[];rep={held:0,checked:0,disputed:0,rescued:0,swaps:0,rejected:0,missing:0,rechecked:0,fixed:0};
+ $('analyze').disabled=true;$('cancel').disabled=false;BGAPI&&BGAPI.clear();frames=[];CORR=[];undo=[];redo=[];rep={held:0,checked:0,disputed:0,rescued:0,swaps:0,rejected:0,missing:0,rechecked:0,fixed:0};
  let prev=null,miss=0,pc_=null,acc={x:0,y:0},camPeak=0;const camOn=!!$('cam')&&$('cam').checked;anchor=null;vel={x:0,y:0};ident=seed&&seed.sig?copySig(seed.sig):null;lastPx=null;camPrevG=null;camCum={x:0,y:0};camUnc=0;camFast=false;const t0=performance.now();
  try{for(let i=0;i<n&&!stop;i++){await seek(start+i/fps);
   const cam=camOn?camStep(prev):{x:0,y:0,c:0};acc.x+=cam.x;acc.y+=cam.y;camCum.x+=cam.x;camCum.y+=cam.y;const cs_=Math.max(Math.abs(cam.x),Math.abs(cam.y));camPeak=Math.max(camPeak,cs_);camFast=cs_>.012;camUnc=Math.min(.12,Math.hypot(cam.x,cam.y)*.7);
@@ -367,7 +368,8 @@ async function analyze(){if(!V.src)return st('Load a video first.');picking=fals
  camCum={x:0,y:0};camUnc=0;camFast=false;tsBase+=Math.round(n*1000/fps)+1000;$('analyze').disabled=false;$('cancel').disabled=true;if(!frames.length)return;rep.missing=frames.filter(f=>!f.lm).length;
  meta={...meta,w:V.videoWidth,h:V.videoHeight,duration:V.duration,fps,start,end};compute();view=[0,Math.max(1,frames.length-1)];
  const note=lasso&&Math.abs(lasso.t-start)>.3?` · Lasso was drawn at ${lasso.t.toFixed(2)}s, not the clip start: redraw it on the first frame for best focus.`:'';
- st(`${stop?'Cancelled, partial. ':'Done. '}${frames.length} frames · ${rep.checked} confirmed by 2+ agreeing passes · ${rep.rescued} rescued by retry · ${rep.swaps} L/R swaps fixed · ${rep.rechecked} re-measured in verify sweeps (${rep.fixed} corrected) · ${rep.rejected} wrong-subject jumps rejected · ${rep.held||0} repeated frames reused · ${rep.missing} untracked${camOn&&camPeak>.004?` · camera shake compensated (peak ${(camPeak*100).toFixed(1)}% of the frame in one step)`:''}${note}`);V.currentTime=start}
+ st(`${stop?'Cancelled, partial. ':'Done. '}${frames.length} frames · ${rep.checked} confirmed by 2+ agreeing passes · ${rep.rescued} rescued by retry · ${rep.swaps} L/R swaps fixed · ${rep.rechecked} re-measured in verify sweeps (${rep.fixed} corrected) · ${rep.rejected} wrong-subject jumps rejected · ${rep.held||0} repeated frames reused · ${rep.missing} untracked${camOn&&camPeak>.004?` · camera shake compensated (peak ${(camPeak*100).toFixed(1)}% of the frame in one step)`:''}${note}`);V.currentTime=start;
+ if(!stop&&BGAPI&&$('bgOn')&&$('bgOn').checked&&frames.length)await BGAPI.capture()}
 async function init(){try{fs=await FilesetResolver.forVisionTasks(WASM)}catch(e){return st('Could not load MediaPipe (internet / http required).')}
  for(const del of['GPU','CPU']){delegate=del;try{await getLM('VIDEO');st(`Model ready (${del}). Upload a video.`);return}catch(e){console.warn(e)}}st('Model failed to load.')}
 // ---- UI
@@ -474,18 +476,18 @@ G.onmouseup=()=>{if(drag&&drag.pan!==undefined&&!drag.moved)V.currentTime=start+
 const zoom=(f,c)=>{if(!frames.length)return;const n=frames.length-1;c??=(view[0]+view[1])/2;let a=c-(c-view[0])*f,b=c+(view[1]-c)*f;if(b-a>n){a=0;b=n}if(b-a<4)return;view=[Math.max(0,a),Math.min(n,b)];lastT=-1};
 G.onwheel=e=>{e.preventDefault();zoom(e.deltaY>0?1.25:.8,gi(e))};$('zin').onclick=()=>zoom(.7);$('zout').onclick=()=>zoom(1.4);$('zoomR').onclick=G.ondblclick=()=>{view=[0,Math.max(1,frames.length-1)];lastT=-1};
 // ---- rig preview (reconstructed from data or from eased keyframes)
-function preview(){if(!$('pvon').checked)return;const w=PV.width=480,h=PV.height=Math.round(480*VH()/VW()),i=ci();pc.fillStyle='#0a0a0b';pc.fillRect(0,0,w,h);if($('pvbg').checked&&V.videoWidth){pc.globalAlpha=.35;pc.drawImage(V,0,0,w,h);pc.globalAlpha=1}
+function preview(){if(!$('pvon').checked)return;const w=PV.width=480,h=PV.height=Math.round(480*VH()/VW()),i=ci();pc.fillStyle='#0a0a0b';pc.fillRect(0,0,w,h);if($('pvrb')&&$('pvrb').checked&&BGAPI&&i>=0)BGAPI.paint(pc,w,h,i,($('amBgQ')&&$('amBgQ').value)||'mid');if($('pvbg').checked&&V.videoWidth){pc.globalAlpha=.35;pc.drawImage(V,0,0,w,h);pc.globalAlpha=1}
  if(i<0||!S.head)return;const W=VW(),H=VH(),off=(+$('off').value||0)*Math.PI/180,kf=$('pvs').value==='kf',skel=$('pvm').value==='skel';pc.lineCap='round';
  for(const id of act()){const d=D[id],val=p=>kf&&K[id]?.[p]?curve(K[id][p],i):S[id][p][i],mx=val('x')*w,my=val('y')*h,L=val('len')*H*w/W,an=val('rot')*Math.PI/180+off,dx=Math.cos(an)*L/2,dy=Math.sin(an)*L/2;
   pc.strokeStyle=id===sel?C.sel:d.side==='L'?C.L:d.side==='R'?C.R:'#cfd3d9';pc.lineWidth=skel?2:id==='head'?16:/tor|pelvis|neck/.test(id)?14:9;pc.beginPath();pc.moveTo(mx-dx,my-dy);pc.lineTo(mx+dx,my+dy);pc.stroke();
   if(skel){pc.fillStyle=pc.strokeStyle;pc.beginPath();pc.arc(mx-dx,my-dy,3,0,7);pc.arc(mx+dx,my+dy,3,0,7);pc.fill()}}}
-$('pvon').onchange=()=>{$('pvw').hidden=!$('pvon').checked;lastT=-1};for(const i of['pvm','pvs','pvbg'])$(i).onchange=()=>lastT=-1;
+$('pvon').onchange=()=>{$('pvw').hidden=!$('pvon').checked;lastT=-1};for(const i of['pvm','pvs','pvbg','pvrb'])$(i).onchange=()=>lastT=-1;
 // ---- export
 const dl=(n,t,m)=>{const a=document.createElement('a');a.href=URL.createObjectURL(t instanceof Blob?t:new Blob([t],{type:m}));a.download=n;a.click()};
 const kcsv=ids=>'part,property,frame,time_s,value,easing,reason\n'+ids.flatMap(id=>KP.flatMap(p=>(K[id]?.[p]||[]).map(q=>[D[id].n,p,q.i,(q.i/fps).toFixed(4),q.v*U(p),easeName(q.e),q.why].join(',')))).join('\n');
 const fcsv=ids=>'part,frame,time_s,rotation,x,y,joint_angle,length,ang_vel,pos_vel,confidence\n'+ids.flatMap(id=>S[id].rot.map((_,i)=>[D[id].n,i,(i/fps).toFixed(4),...['rot','x','y','jt','len','vrot','vpos','c'].map(p=>S[id][p][i]*U(p))].join(','))).join('\n');
 $('csv').onclick=()=>{if(!frames.length)return st('Analyze first.');const sc=$('xs').value,ids=sc.startsWith('sel')?[sel]:act();dl('rovio.csv',sc.endsWith('all')?fcsv(ids):kcsv(ids),'text/csv')};
-const SET=['rig','mdl','smart','np','cd','cp','ct','mv','fps','sm','sP','sR','sJ','lf','preset','kR','kP','kMin','kMax','coord','off','wrap','t0','t1','xs','thr','dtol','lmask','fpad','eng','ddet','held','lock','cam','stab','stabT'];
+const SET=['rig','mdl','smart','np','cd','cp','ct','mv','fps','sm','sP','sR','sJ','lf','preset','kR','kP','kMin','kMax','coord','off','wrap','t0','t1','xs','thr','dtol','lmask','fpad','eng','ddet','held','lock','cam','stab','stabT','bgOn','bgMode','bgEvery'];
 const gs=()=>Object.fromEntries(SET.map(i=>[i,$(i).type==='checkbox'?$(i).checked:$(i).value])),ss=o=>{for(const i in o){if(!$(i))continue;if($(i).type==='checkbox')$(i).checked=o[i];else $(i).value=o[i]}};
 $('json').onclick=()=>frames.length?dl('rovio_analysis.json',JSON.stringify({meta,settings:gs(),removedParts:[...OFF],landmarksRaw:frames,corrections:CORR,landmarksCorrected:EF,segments:D,rawSeries:RF,smoothedSeries:S,keyframes:K}),'application/json'):st('Analyze first.');
 $('gpng').onclick=()=>{if(!S[sel])return st('Analyze first.');const c=document.createElement('canvas');c.width=1400;c.height=420;drawGraph(c,prop,[0,frames.length-1]);c.toBlob(b=>dl(`graph_${sel}_${prop}.png`,b))};
@@ -500,13 +502,13 @@ $('sheet').onclick=sheet;
 // ---- sessions (IndexedDB)
 const tx=(m,f)=>new Promise((res,rej)=>{const q=indexedDB.open('motiontrace',1)/* DB name kept so sessions saved before the rename still open */;q.onupgradeneeded=()=>q.result.createObjectStore('s',{keyPath:'name'});q.onerror=()=>rej(q.error);q.onsuccess=()=>{const t=q.result.transaction('s',m),r=f(t.objectStore('s'));t.oncomplete=()=>res(r.result);t.onerror=t.onabort=()=>rej(t.error)}});
 const listS=async()=>{try{const k=await tx('readonly',s=>s.getAllKeys());$('sess').innerHTML=k.map(n=>`<option>${n}</option>`).join('')}catch{}};
-$('save').onclick=async()=>{if(!frames.length)return st('Analyze first.');const name=prompt('Session name',meta.name||'session');if(!name)return;const o={name,meta,fps,start,frames,CORR,set:gs(),K,sel,prop,lasso,anchor,subj,seed,off:[...OFF]};
+$('save').onclick=async()=>{if(!frames.length)return st('Analyze first.');const name=prompt('Session name',meta.name||'session');if(!name)return;const o={name,meta,fps,start,frames,CORR,set:gs(),K,sel,prop,lasso,anchor,subj,seed,off:[...OFF],bg:BGAPI?BGAPI.get():null};
  try{await tx('readwrite',s=>s.put({...o,video:curFile}));st('Session saved with video.')}catch(e){try{await tx('readwrite',s=>s.put({...o,video:null}));st('Saved without the video (storage limit). Reselect the video when reopening.')}catch(e2){st('Save failed: '+e2.message)}}listS()};
-$('open').onclick=async()=>{const n=$('sess').value;if(!n)return;const o=await tx('readonly',s=>s.get(n));if(!o)return;ss(o.set);OFF.clear();(o.off||[]).forEach(id=>OFF.add(id));applyOff();subj=o.subj||null;seed=o.seed||null;ident=null;meta=o.meta;fps=o.fps;start=o.start;frames=(o.frames||[]).map(({cm,cb,...f})=>f);CORR=o.CORR||[];lasso=o.lasso||null;anchor=o.anchor||null;undo=[];redo=[];sel=o.sel;prop=o.prop;$('prop').value=prop;view=[0,Math.max(1,frames.length-1)];
+$('open').onclick=async()=>{const n=$('sess').value;if(!n)return;const o=await tx('readonly',s=>s.get(n));if(!o)return;ss(o.set);OFF.clear();(o.off||[]).forEach(id=>OFF.add(id));applyOff();BGAPI&&BGAPI.set(o.bg||null);subj=o.subj||null;seed=o.seed||null;ident=null;meta=o.meta;fps=o.fps;start=o.start;frames=(o.frames||[]).map(({cm,cb,...f})=>f);CORR=o.CORR||[];lasso=o.lasso||null;anchor=o.anchor||null;undo=[];redo=[];sel=o.sel;prop=o.prop;$('prop').value=prop;view=[0,Math.max(1,frames.length-1)];
  const fin=()=>{compute();K=o.K;selKf=-1;dirty=true;V.currentTime=start;st('Session opened.')};
  if(o.video){curFile=o.video;V.src=URL.createObjectURL(o.video);V.onloadedmetadata=()=>{$('scrub').max=V.duration;fin()}}else{fin();st('Opened without video — reselect the original video file to see playback.')}};
 $('del').onclick=async()=>{const n=$('sess').value;if(n&&confirm('Delete '+n+'?')){await tx('readwrite',s=>s.delete(n));listS()}};
-const clear=()=>{frames=[];EF=[];S={};R={};RF={};K={};CORR=[];undo=[];redo=[];selKf=-1;subj=null;seed=null;ident=null;pickC=[];lasso=null;anchor=null;lp=[];dirty=true;lastT=-1};
+const clear=()=>{BGAPI&&BGAPI.clear();frames=[];EF=[];S={};R={};RF={};K={};CORR=[];undo=[];redo=[];selKf=-1;subj=null;seed=null;ident=null;pickC=[];lasso=null;anchor=null;lp=[];dirty=true;lastT=-1};
 $('reset').onclick=()=>{const l=lasso,sj=subj,sd=seed;clear();lasso=l;subj=sj;seed=sd;st('Analysis reset.')};$('newS').onclick=()=>{clear();V.removeAttribute('src');V.load();curFile=null;meta={};st('New session.')};
 // ---- wiring
 $('file').onchange=e=>{const f=e.target.files[0];if(!f)return;curFile=f;V.src=URL.createObjectURL(f);V.onloadedmetadata=()=>{const keep=frames.length&&f.name===meta.name;if(!keep){clear();$('t0').value=0;$('t1').value=V.duration.toFixed(2)}meta={...meta,name:f.name,w:V.videoWidth,h:V.videoHeight,duration:V.duration};$('scrub').max=V.duration;st(`${f.name} · ${V.videoWidth}×${V.videoHeight} · ${V.duration.toFixed(1)}s · ${(f.size/1e6).toFixed(1)}MB`);if(keep)compute()}};
@@ -555,4 +557,5 @@ function showTab(t){for(const b of $('tabs').querySelectorAll('button'))b.classL
 $('tabs').onclick=e=>{const t=e.target.dataset?.tab;if(t)showTab(t)};
 try{showTab(localStorage.getItem('vid2anim.tab')||'scan')}catch{showTab('scan')}
 // ---- Alight Motion export (alight.js): XML project and calibration file
-initAlight({$,st,dl,curve,act,K:()=>K,S:()=>S,D:()=>D,fps:()=>fps,n:()=>frames.length,W:VW,H:VH,off:()=>+$('off').value||0,title:()=>(meta&&meta.name)||'Rovio'});
+BGAPI=initBG({$,st,V,seek,frames:()=>frames,fps:()=>fps,start:()=>start,W:VW,H:VH,shifts:camShifts,isStop:()=>stop,resetStop:()=>{stop=false},redraw:()=>{lastT=-1}});
+initAlight({$,st,dl,curve,act,bg:()=>BGAPI?BGAPI.get():null,bgOn:()=>!!$('bgOn')&&$('bgOn').checked,K:()=>K,S:()=>S,D:()=>D,fps:()=>fps,n:()=>frames.length,W:VW,H:VH,off:()=>+$('off').value||0,title:()=>(meta&&meta.name)||'Rovio'});
