@@ -17,7 +17,35 @@
 // in the app although our own preview (same geometry model) looked right. Drawn size = 2 × size × scale; default size 100
 // (AM's own default), so even a dropped property gives the same result.
 
-/* ───────── helpers ───────── */
+import {gridFor,tileSeries} from './bg.js?v=1';
+
+/* ───────── rebuilt background ─────────
+   The AI background capture (bg.js) gives a few colour plates over time. Here every plate becomes a grid of plain rectangle layers
+   (Low / Mid / High = 8 / 16 / 32 columns) that sit under the stickman. A part whose colour changes gets a colour keyframe at every
+   capture, a part that never changes keeps one fixed colour. Everything uses the same rectangle + colour tags as the bars. */
+const hexC=v=>'#FF'+[0,1,2].map(k=>Math.max(0,Math.min(255,Math.round(v[k]))).toString(16).padStart(2,'0')).join('').toUpperCase();
+function pruneKeys(k,tol=3){ // drop colour keys that the neighbouring keys already predict
+  const same=(a,b)=>a.every((x,j)=>Math.abs(x-b[j])<=tol);
+  if(k.length<3)return k.length===2&&same(k[0].v,k[1].v)?[k[0]]:k;
+  const o=[k[0]];
+  for(let j=1;j<k.length-1;j++){const a=o[o.length-1],b=k[j+1],f=(k[j].i-a.i)/(b.i-a.i);
+    if(!k[j].v.every((x,ch)=>Math.abs(x-(a.v[ch]+(b.v[ch]-a.v[ch])*f))<=tol))o.push(k[j])}
+  o.push(k[k.length-1]);
+  return o.length===2&&same(o[0].v,o[1].v)?[o[0]]:o;
+}
+function bgLayers(M,o,bg,T,sdiv){
+  const{cw,ch}=M,{cols,rows}=gridFor(o.bgQ,bg.W,bg.H),ser=tileSeries(bg,cols,rows),anim=o.bgAnim!=='fixed'&&ser.length>1,
+    sc=`<scale value="${f6((cw/cols+2)/sdiv)},${f6((ch/rows+2)/sdiv)}"/>`,out=[]; // each part is 2 px bigger than its cell so no seams show
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    const t=r*cols+c;let keys=ser.map(s=>({i:s.i,v:[s.rgb[3*t],s.rgb[3*t+1],s.rgb[3*t+2]]}));
+    keys=pruneKeys(anim?keys:[keys[0]]);
+    const loc=`<location value="${f6((c+.5)*cw/cols)},${f6((r+.5)*ch/rows)},0.000000"/>`;
+    const fill=keys.length<2?`<fillColor value="${hexC(keys[0].v)}"/>`:`<fillColor>\n        ${keys.map(k=>`<kf t="${T(k.i)}" v="${hexC(k.v)}"/>`).join('\n        ')}\n      </fillColor>`;
+    out.push({pid:undefined,role:'bg',label:`BG ${r+1}-${c+1}`,sid:'.rect',color:hexC(keys[0].v),fill,tf:[loc,sc]});
+  }
+  return out;
+}
+
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const f6=v=>(Number.isFinite(v)?v:0).toFixed(6);
 const num=v=>{const s=(+v).toFixed(8);return s.replace(/(\.\d*?)0+$/,'$1').replace(/\.$/,'.0')};
@@ -326,12 +354,15 @@ function emit(M,dyn){
       items.push({pid:'head',role:'main',label:'Head',sid:'.rect',color:WHITE,tf:[loc,sq(hd)]});
     }
   }
+  // rebuilt background: first in the list = lowest layer (the order switch below flips the whole list, so it stays at the bottom)
+  let bgParts=0;const bgd=o.bgOn&&c.bg?c.bg():null;
+  if(bgd&&bgd.plates&&bgd.plates.length&&bgd.n===n){const L=bgLayers(M,o,bgd,T,sdiv);bgParts=L.length;items.unshift(...L)}
   if(o.order==='top')items.reverse();
   const layers=items.map((it,li)=>`  <shape id="${li+1}" label="${esc(it.label)}" startTime="0" endTime="${totalMs}" fillType="color" s="${it.sid}">
     <transform>
       ${it.tf.join('\n      ')}
     </transform>
-    <fillColor value="${it.color}"/>
+    ${it.fill||`<fillColor value="${it.color}"/>`}
     ${SZ}
   </shape>`).join('\n');
   const title=(o.title||'Rovio').slice(0,60);
@@ -340,7 +371,7 @@ function emit(M,dyn){
 ${layers}
 </scene>
 `;
-  return{xml,items:items.map(i=>({pid:i.pid,role:i.role})),info:{layers:items.length,canvas:`${cw}×${ch}`,ms:totalMs,fps:projFps,bytes:new Blob([xml]).size}};
+  return{xml,items:items.map(i=>({pid:i.pid,role:i.role})),info:{layers:items.length,bgParts,canvas:`${cw}×${ch}`,ms:totalMs,fps:projFps,bytes:new Blob([xml]).size}};
 }
 
 /* ───────── CHECK 1: the analysed layout ───────── */
@@ -358,6 +389,9 @@ function parseScene(xml){
   for(const m of xml.matchAll(/<shape\b([^>]*)>([\s\S]*?)<\/shape>/g)){
     const L={id:attr(m[1],'id'),label:attr(m[1],'label'),start:+attr(m[1],'startTime'),end:+attr(m[1],'endTime'),shape:attr(m[1],'s'),ch:{}};
     L.color=(m[2].match(/<fillColor value="([^"]*)"/)||[])[1];
+    const fk=m[2].match(/<fillColor>([\s\S]*?)<\/fillColor>/);
+    if(fk){const kfs=[];for(const q of fk[1].matchAll(/<kf\s+t="([^"]+)"\s+v="#([0-9a-fA-F]{8})"\s*\/>/g)){const h=q[2];kfs.push({t:+q[1],v:[parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16),parseInt(h.slice(6,8),16)]})}
+      if(kfs.length){L.ch.fill={kfs};L.color=hexC(kfs[0].v)}}
     const sp=m[2].match(/<property\s+name="size"\s+type="vec2"\s+value="([^"]*)"\s*\/>/);if(sp)L.ch.size={v:sp[1].split(',').map(Number)};
     for(const tag of['location','scale','rotation']){
       const st=m[2].match(new RegExp(`<${tag}\\s+value="([^"]*)"\\s*/>`));
@@ -413,7 +447,7 @@ function check2(M,em,dyn){
   const geomAt=i=>lay.map(({L,meta})=>{
     const loc=evalCh(L.ch.location,i,o,toF),sc=evalCh(L.ch.scale,i,o,toF),rot=L.ch.rotation?evalCh(L.ch.rotation,i,o,toF)[0]:0;
     const sz=L.ch.size?evalCh(L.ch.size,i,o,toF):[100,100]; // 100 = Alight Motion's own default if a shape somehow lacks the property
-    return{pid:meta.pid,role:meta.role,cx:loc[0],cy:loc[1],w:2*sz[0]*sc[0],h:2*sz[1]*sc[1],ang:sgn*rot,color:L.color};
+    return{pid:meta.pid,role:meta.role,cx:loc[0],cy:loc[1],w:2*sz[0]*sc[0],h:2*sz[1]*sc[1],ang:sgn*rot,color:L.ch.fill?hexC(evalCh(L.ch.fill,i,o,toF)):L.color};
   });
   const segsAt=i=>geomAt(i).filter(g=>g.role==='main'&&g.pid).map(g=>{
     if(stick&&g.pid==='head')return mkSeg(g.pid,g.cx,g.cy,0,1,0,g.w/2*1.1);
@@ -457,7 +491,7 @@ export function buildCalibration(o){
     <transform>
       ${loc}${extra}
     </transform>
-    <fillColor value="${color}"/>
+    ${color.startsWith('<')?color:`<fillColor value="${color}"/>`}
     ${szTag}
   </shape>`;
   const mv=(y,k)=>`<location>\n        ${k.map(([t,x,e])=>`<kf t="${t}" v="${x}.000000,${y}.000000,0.000000"${e?` e="${e}"`:''}/>`).join('\n        ')}\n      </location>`;
@@ -473,7 +507,8 @@ export function buildCalibration(o){
     mk(6,'HEAD - must be a white SQUARE (same shape as the bars)','#FFFFFFFF',`<location value="160.000000,950.000000,0.000000"/>`,sc),
     mk(7,'ORDER first in file - RED square','#FFFF2D2D',`<location value="780.000000,950.000000,0.000000"/>`,sc),
     mk(8,'ORDER second in file - BLUE square: if BLUE covers RED then first layer = bottom, if RED covers BLUE set "First layer = top"','#FF2D6BFF',`<location value="830.000000,985.000000,0.000000"/>`,sc),
-    mk(9,'SIZE - this bar must reach almost edge to edge (880 of 1080 px)','#FF8AFF3D',`<location value="540.000000,80.000000,0.000000"/>`,`\n      <scale value="${sizeScale},0.300000"/>`)
+    mk(9,'SIZE - this bar must reach almost edge to edge (880 of 1080 px)','#FF8AFF3D',`<location value="540.000000,80.000000,0.000000"/>`,`\n      <scale value="${sizeScale},0.300000"/>`),
+    mk(10,'BG COLOUR - this small square (top left) must fade from RED to BLUE over the clip. If it stays one colour, set "Background colour animation" to Fixed colours','',`<location value="60.000000,60.000000,0.000000"/>`,`\n      <scale value="0.500000,0.500000"/>`,'.rect').replace('<fillColor value=""/>',`<fillColor>\n        <kf t="${tt(0)}" v="#FFFF1226"/>\n        <kf t="${tt(1)}" v="#FF2D6BFF"/>\n      </fillColor>`)
   ].join('\n');
   // note: layers 1,3,4 are fraction-mode; layer 2 is seconds-mode. The scene stays valid either way, the wrong one simply overshoots.
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -487,22 +522,33 @@ ${layers}
 export function initAlight(c){
   const $=c.$,st=c.st,LS='vid2anim.alight';
   if(['amXml','amCal','amShare','amMsg'].some(i=>!$(i))){console.warn('Alight panel not found in index.html, export disabled');return}
-  const F=['amLong','amBg','amThick','amTime','amEase','amDense','amFps','amInv','amStyle','amEdge','amHead','amOrder','amSkip','amSize'].filter(i=>$(i));
+  const F=['amLong','amBg','amThick','amTime','amEase','amDense','amFps','amInv','amStyle','amEdge','amHead','amOrder','amSkip','amSize','amBgQ','amBgAnim'].filter(i=>$(i));
   const get=i=>!$(i)?undefined:$(i).type==='checkbox'?$(i).checked:$(i).value;
   try{const s=JSON.parse(localStorage.getItem(LS)||'{}');for(const i of F)if(i in s&&$(i)){if($(i).type==='checkbox')$(i).checked=s[i];else $(i).value=s[i]}}catch{}
   const save=()=>{try{localStorage.setItem(LS,JSON.stringify(Object.fromEntries(F.map(i=>[i,get(i)]))))}catch{}};
   for(const i of F)$(i).addEventListener('change',save);
-  const opts=()=>({long:+get('amLong'),bg:get('amBg'),thick:+get('amThick')||100,tmode:get('amTime'),easeOn:get('amEase'),dense:get('amDense')==='dense',fps:get('amFps'),inv:get('amInv'),style:get('amStyle')||'stick',edge:$('amEdge')?+get('amEdge'):2,headPct:+get('amHead')||100,order:get('amOrder')||'bottom',size:$('amSize')?+get('amSize')||100:100,title:c.title()});
+  const opts=()=>({long:+get('amLong'),bg:get('amBg'),thick:+get('amThick')||100,tmode:get('amTime'),easeOn:get('amEase'),dense:get('amDense')==='dense',fps:get('amFps'),inv:get('amInv'),style:get('amStyle')||'stick',edge:$('amEdge')?+get('amEdge'):2,headPct:+get('amHead')||100,order:get('amOrder')||'bottom',size:$('amSize')?+get('amSize')||100:100,title:c.title(),bgOn:c.bgOn?!!c.bgOn():false,bgQ:get('amBgQ')||'mid',bgAnim:get('amBgAnim')||'kf'});
   const safe=s=>(s||'Rovio').replace(/\.[^.]+$/,'').replace(/[^\w\- ]+/g,'_').slice(0,40)||'Rovio';
   const msg=t=>{$('amMsg').textContent=t;st(t)};
   // adjustments made in the review (auto-fix switch, parts moved by hand, parts left out); reset when a different analysis is loaded
   let adj={auto:false,max:40,hide:new Set(),move:{}},adjKey='';
   const syncKey=()=>{const k=c.n()+'|'+c.act().join(',');if(k!==adjKey){adjKey=k;adj={auto:false,max:40,hide:new Set(),move:{}}}};
   const make=()=>{syncKey();const o=opts(),r=evaluate(c,o,adj);return{...r,name:safe(o.title)+'_alight.xml'}};
-  const summary=r=>`${r.info.layers} layers · ${r.info.canvas} · ${(r.info.ms/1000).toFixed(2)}s @ ${r.info.fps} fps · ${(r.info.bytes/1024).toFixed(0)} KB · checks: ${r.r1.ok?'1 ✔':'1 ✖'} ${r.r2.ok?'2 ✔':'2 ✖'}`;
+  const summary=r=>`${r.info.layers} layers${r.info.bgParts?` (${r.info.bgParts} background parts)`:opts().bgOn?' (no background captured yet)':''} · ${r.info.canvas} · ${(r.info.ms/1000).toFixed(2)}s @ ${r.info.fps} fps · ${(r.info.bytes/1024).toFixed(0)} KB · checks: ${r.r1.ok?'1 ✔':'1 ✖'} ${r.r2.ok?'2 ✔':'2 ✖'}`;
   const doDl=r=>{c.dl(r.name,r.xml,'application/xml');msg(`Saved ${r.name}: ${summary(r)}`)};
   const doShare=async r=>{try{const f=new File([r.xml],r.name,{type:'application/xml'});
       if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:r.name});msg('Shared.')}else{c.dl(r.name,r.xml,'application/xml');msg('This browser cannot share files, so the file was downloaded instead.')}}catch(e){if(e.name!=='AbortError')msg(e.message)}};
+  // background line under the quality setting
+  const bgInfo=()=>{
+    const el=$('amBgInfo');if(!el)return;
+    const on=c.bgOn&&c.bgOn(),bg=c.bg&&c.bg();
+    if(!on){el.textContent='Background rebuild is off. Turn it on in Scan → Background rebuild and the export will include it.';return}
+    if(!bg){el.textContent='Background rebuild is on, but nothing is captured yet. Analyze a video (it runs by itself) or press Capture background now.';return}
+    const q=get('amBgQ')||'mid',g=gridFor(q,bg.W,bg.H);
+    el.textContent=`${g.cols} × ${g.rows} = ${g.parts} background parts · ${bg.mode==='moving'?'Moving':'Static'} · rebuilt every ${bg.every} frames (${bg.plates.length} captures).`+(g.parts>300?' This many layers can make Alight Motion slow on a phone.':'');
+  };
+  if($('amBgQ'))$('amBgQ').addEventListener('change',bgInfo);
+  window.addEventListener('rovio-bg',bgInfo);bgInfo();
   const hasReview=['amRev','amRCv','amRDl','amROk'].every(i=>$(i));
   // ---- review dialog (checks 1 + 2 results, preview, fixes, manual check 3)
   const R={r:null,frame:0,act:'dl',timer:0,bakedMove:{}};
