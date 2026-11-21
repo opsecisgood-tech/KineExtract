@@ -81,7 +81,9 @@
 <label>Keyframe time unit<select id="amTime"><option value="frac" selected>Fraction of layer length</option><option value="sec">Seconds from layer start</option></select></label>
 <label>Easing stored on<select id="amEase"><option value="arrive" selected>Arriving keyframe</option><option value="depart">Departing keyframe</option></select></label>
 <label><input id="amInv" type="checkbox"> Invert rotation direction</label>
-<label>Layer order in the file<select id="amOrder"><option value="bottom" selected>First layer = bottom</option><option value="top">First layer = top</option></select></label></details>
+<label>Layer order in the file<select id="amOrder"><option value="bottom" selected>First layer = bottom</option><option value="top">First layer = top</option></select></label>
+<label>Shape size (half-extent, advanced)<input id="amSize" type="number" min="1" max="500" step="1" value="50"></label>
+<small>Alight Motion draws every bar at 2 × this value × the Scale shown below it. 50 is correct for current Alight Motion builds (verified against real 5.0.27x / file-format 106 exports) — only raise or lower it if, after this fix, parts still come out a consistent fraction of the right length. The SIZE row in the calibration project shows whether 50 is right for your build: that bar should reach almost edge to edge.</small></details>
 <label><input id="amSkip" type="checkbox"> Skip the review when both automatic checks pass</label>
 <button id="amCal">Calibration project (.xml)</button>
 <div class="row"><button id="amXml" class="go">Check &amp; download .xml</button><button id="amShare">Check &amp; share…</button></div>
@@ -132,7 +134,7 @@
 <div class="row"><input id="amRDx" type="number" step="1" value="0" aria-label="Move right (px)" title="Right (+) / left (-) in px"><input id="amRDy" type="number" step="1" value="0" aria-label="Move down (px)" title="Down (+) / up (-) in px"></div>
 <div class="row"><button id="amRL" title="Left">←</button><button id="amRU" title="Up">↑</button><button id="amRD" title="Down">↓</button><button id="amRR" title="Right">→</button></div>
 <label><input id="amRHide" type="checkbox"> Leave this part out of the file</label>
-<small>Moves are in px on a 1080 canvas and keep the part in place for the whole clip.</small>
+<small>Moves are in px on a 1080 canvas and keep the part in place for the whole clip. The part you've selected above is outlined in cyan on the preview and moves live as you nudge it, before the slower overlap re-check catches up.</small>
 <div class="row"><button id="amRReset">Reset all fixes</button></div></details>
 </div>
 <div id="amRp"><canvas id="amRCv" width="400" height="300"></canvas>
@@ -141,4 +143,4 @@
 </div>
 <div class="agh"><label class="amok"><input id="amROk" type="checkbox"> I checked the preview and it looks right (manual check)</label><button id="amRDl" class="go" disabled>Download .xml</button><button id="amRSh" disabled>Share file…</button></div>
 </div>
-<script type="module" src="app.js?v=8"></script></body></html>
+<script type="module" src="app.js?v=9"></script></body></html>
