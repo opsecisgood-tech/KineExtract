@@ -3,7 +3,7 @@ import {initAlight} from './alight.js?v=8';
 const $=i=>document.getElementById(i),V=$('v'),O=$('ov'),ox=O.getContext('2d'),G=$('graph'),EC=$('ezc'),ec=EC.getContext('2d'),PV=$('pv'),pc=PV.getContext('2d'),crop=document.createElement('canvas'),cx=crop.getContext('2d');
 const WASM="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm",MURL=m=>`https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_${m}/float16/1/pose_landmarker_${m}.task`;
 let fs,delegate='GPU',LMs={},tsBase=0,frames=[],EF=[],R={},RF={},S={},K={},CORR=[],undo=[],redo=[],sel='head',prop='rot',selKf=-1,stop=false,view=[0,1],fps=15,start=0,dirty=true,endAt=null,lastT=-1,meta={},curFile=null,subj=null,picking=false,hov=null,rep={},lasso=null,lp=[],lassoing=false,drawingL=false,anchor=null,vel={x:0,y:0},BR=null,seed=null,ident=null,pickC=[],pickT=-1,lastPx=null;
-const C={L:'#3de8ff',R:'#ff8a4c',N:'#b4b8e0',sel:'#ffe45e',brand:'#fc01e6',ok:'#3dffa6'};
+const C={L:'#3de8ff',R:'#ff8a4c',N:'#c4c4cc',sel:'#ffe45e',brand:'#ff1226',ok:'#3dffa6'};
 const KP=['rot','x','y','jt','len'],PROPS={rot:'Rotation °',x:'Position X',y:'Position Y',jt:'Joint angle °',len:'Segment length',vrot:'Angular velocity °/s (read-only)',vpos:'Position velocity /s (read-only)'};
 $('prop').innerHTML=Object.entries(PROPS).map(([k,v])=>`<option value=${k}>${v}</option>`).join('');
 const NAMES='nose,eyeIL,eyeL,eyeOL,eyeIR,eyeR,eyeOR,earL,earR,mouthL,mouthR,shL,shR,elL,elR,wrL,wrR,pkL,pkR,ixL,ixR,thL,thR,hipL,hipR,knL,knR,anL,anR,heL,heR,toL,toR'.split(',');
@@ -392,7 +392,7 @@ const EX=x=>20+x*120,EY=y=>120-(y+1)*34;
 function ezEd(){const k=KS(),a=k&&k[selKf],ok=a&&selKf<k.length-1;for(const i of['ezs','e1','e2','e3','e4','ffit'])$(i).disabled=!ok;
  ec.clearRect(0,0,160,140);if(!ok){$('ezn').textContent='Select a keyframe (not the last) to edit the curve to the next one.';return}
  $('ezs').value=easeName(a.e);const arr=Array.isArray(a.e);[1,2,3,4].forEach(n=>{$('e'+n).disabled=!arr;$('e'+n).value=arr?a.e[n-1]:''});
- ec.fillStyle='#ffffff14';ec.fillRect(EX(0),EY(1),120,34);ec.strokeStyle='#8890b0';ec.strokeRect(EX(0),EY(1),120,34);ec.strokeRect(EX(0),EY(0),120,0);
+ ec.fillStyle='#ffffff14';ec.fillRect(EX(0),EY(1),120,34);ec.strokeStyle='#8e8e98';ec.strokeRect(EX(0),EY(1),120,34);ec.strokeRect(EX(0),EY(0),120,0);
  const b=k[selKf+1],d=b.v-a.v,y=S[sel][prop];ec.fillStyle='#ffffff77';if(Math.abs(d)>1e-9)for(let i=a.i+1;i<b.i;i++)ec.fillRect(EX((i-a.i)/(b.i-a.i))-1,EY((y[i]-a.v)/d)-1,2,2);
  ec.strokeStyle='#3de8ff';ec.lineWidth=2;ec.beginPath();for(let q=0;q<=60;q++){const x=q/60,yy=ez(a.e,x);q?ec.lineTo(EX(x),EY(yy)):ec.moveTo(EX(x),EY(yy))}ec.stroke();ec.lineWidth=1;
  if(arr){ec.strokeStyle='#fff';ec.fillStyle='#fff';for(const[x0,y0,hx,hy]of[[0,0,a.e[0],a.e[1]],[1,1,a.e[2],a.e[3]]]){ec.beginPath();ec.moveTo(EX(x0),EY(y0));ec.lineTo(EX(hx),EY(hy));ec.stroke();ec.beginPath();ec.arc(EX(hx),EY(hy),5,0,7);ec.fill()}}
@@ -408,7 +408,7 @@ for(const n of[1,2,3,4])$('e'+n).onchange=()=>{const a=KS()?.[selKf];if(!a||!Arr
 $('ffit').onclick=()=>{if(selKf>=0){freeFit(sel,prop,selKf);dirty=true;lastT=-1}};
 $('ffitA').onclick=()=>{const k=KS();if(!k)return;st('Free-fitting…');for(let j=0;j<k.length-1;j++)freeFit(sel,prop,j);st('Free-fit done for '+PROPS[prop]);dirty=true;lastT=-1};
 // ---- overlay + corrections
-const PCOL=['#ffe45e','#3dffa6','#ff8a4c','#3de8ff','#fc01e6','#b48cff'];
+const PCOL=['#ffe45e','#3dffa6','#ff8a4c','#3de8ff','#ff1226','#b48cff'];
 function drawPick(w,h){const lw=Math.max(2,w/260);ox.save();ox.lineWidth=lw*1.4;ox.textAlign='center';ox.textBaseline='middle';ox.font='700 '+Math.round(w/45)+'px sans-serif';
  pickC.forEach((l,n)=>{const col=PCOL[n%PCOL.length];ox.strokeStyle=col;ox.globalAlpha=.9;ox.beginPath();for(const[a,b]of CONN){if(l[a].v<.3||l[b].v<.3)continue;ox.moveTo(l[a].x*w,l[a].y*h);ox.lineTo(l[b].x*w,l[b].y*h)}ox.stroke();
   const t=torsoC(l);ox.globalAlpha=1;ox.fillStyle=col;ox.beginPath();ox.arc(t.x*w,t.y*h,w/46,0,7);ox.fill();ox.fillStyle='#000';ox.fillText(String(n+1),t.x*w,t.y*h+1)});ox.restore()}
@@ -451,11 +451,11 @@ $('pick').onclick=async()=>{if(!V.src)return st('Load a video first.');picking=t
 $('pclear').onclick=()=>{subj=null;seed=null;ident=null;pickC=[];picking=false;O.style.cursor='';lastT=-1;st('Subject lock cleared. The largest, clearest person (or the lasso) will be used.')};
 // ---- graph (also used offscreen for PNG / reference sheet)
 const PL=48,PB=18;
-function drawGraph(cv,pr,vw,live,id=sel,mini=false){const w=cv.width,h=cv.height,g=cv.getContext('2d');g.fillStyle='#0d0f24';g.fillRect(0,0,w,h);const s=S[id]?.[pr];if(!s||!s.length)return null;
+function drawGraph(cv,pr,vw,live,id=sel,mini=false){const w=cv.width,h=cv.height,g=cv.getContext('2d');g.fillStyle='#0a0a0b';g.fillRect(0,0,w,h);const s=S[id]?.[pr];if(!s||!s.length)return null;
  const u=U(pr),a=Math.max(0,Math.floor(vw[0])),b=Math.min(s.length-1,Math.ceil(vw[1])),k=K[id]?.[pr],raw=RF[id]?.[pr],sr=$('rawc').checked&&raw;let mn=1e9,mx=-1e9;
  for(let i=a;i<=b;i++){mn=Math.min(mn,s[i]*u);mx=Math.max(mx,s[i]*u);if(sr){mn=Math.min(mn,raw[i]*u);mx=Math.max(mx,raw[i]*u)}}if(mx-mn<1e-9){mx+=1;mn-=1}const pd=(mx-mn)*.08;mn-=pd;mx+=pd;
  const X=i=>PL+(i-vw[0])/(vw[1]-vw[0]||1)*(w-PL-8),Y=v=>h-PB-(v-mn)/(mx-mn)*(h-PB-8);
- g.font='10px sans-serif';g.fillStyle='#8a8fc0';g.strokeStyle='#242850';for(let t=0;t<=4;t++){const v=mn+(mx-mn)*t/4;g.beginPath();g.moveTo(PL,Y(v));g.lineTo(w,Y(v));g.stroke();g.fillText(f3(v),2,Y(v)+3)}
+ g.font='10px sans-serif';g.fillStyle='#8e8e98';g.strokeStyle='#2a2a30';for(let t=0;t<=4;t++){const v=mn+(mx-mn)*t/4;g.beginPath();g.moveTo(PL,Y(v));g.lineTo(w,Y(v));g.stroke();g.fillText(f3(v),2,Y(v)+3)}
  for(let t=0;t<=6;t++){const i=vw[0]+(vw[1]-vw[0])*t/6;g.fillText((i/fps).toFixed(2)+'s',X(i)-12,h-4)}
  const line=(c,wd,f)=>{g.strokeStyle=c;g.lineWidth=wd;g.beginPath();for(let i=a;i<=b;i++){const v=f(i);i===a?g.moveTo(X(i),Y(v)):g.lineTo(X(i),Y(v))}g.stroke();g.lineWidth=1};
  if(sr)line('#666',1,i=>raw[i]*u);line('#3de8ff',1.5,i=>s[i]*u);if(k)line('#ff9f43',2,i=>curve(k,i)*u);
@@ -474,7 +474,7 @@ G.onmouseup=()=>{if(drag&&drag.pan!==undefined&&!drag.moved)V.currentTime=start+
 const zoom=(f,c)=>{if(!frames.length)return;const n=frames.length-1;c??=(view[0]+view[1])/2;let a=c-(c-view[0])*f,b=c+(view[1]-c)*f;if(b-a>n){a=0;b=n}if(b-a<4)return;view=[Math.max(0,a),Math.min(n,b)];lastT=-1};
 G.onwheel=e=>{e.preventDefault();zoom(e.deltaY>0?1.25:.8,gi(e))};$('zin').onclick=()=>zoom(.7);$('zout').onclick=()=>zoom(1.4);$('zoomR').onclick=G.ondblclick=()=>{view=[0,Math.max(1,frames.length-1)];lastT=-1};
 // ---- rig preview (reconstructed from data or from eased keyframes)
-function preview(){if(!$('pvon').checked)return;const w=PV.width=480,h=PV.height=Math.round(480*VH()/VW()),i=ci();pc.fillStyle='#0d0f24';pc.fillRect(0,0,w,h);if($('pvbg').checked&&V.videoWidth){pc.globalAlpha=.35;pc.drawImage(V,0,0,w,h);pc.globalAlpha=1}
+function preview(){if(!$('pvon').checked)return;const w=PV.width=480,h=PV.height=Math.round(480*VH()/VW()),i=ci();pc.fillStyle='#0a0a0b';pc.fillRect(0,0,w,h);if($('pvbg').checked&&V.videoWidth){pc.globalAlpha=.35;pc.drawImage(V,0,0,w,h);pc.globalAlpha=1}
  if(i<0||!S.head)return;const W=VW(),H=VH(),off=(+$('off').value||0)*Math.PI/180,kf=$('pvs').value==='kf',skel=$('pvm').value==='skel';pc.lineCap='round';
  for(const id of act()){const d=D[id],val=p=>kf&&K[id]?.[p]?curve(K[id][p],i):S[id][p][i],mx=val('x')*w,my=val('y')*h,L=val('len')*H*w/W,an=val('rot')*Math.PI/180+off,dx=Math.cos(an)*L/2,dy=Math.sin(an)*L/2;
   pc.strokeStyle=id===sel?C.sel:d.side==='L'?C.L:d.side==='R'?C.R:'#cfd3d9';pc.lineWidth=skel?2:id==='head'?16:/tor|pelvis|neck/.test(id)?14:9;pc.beginPath();pc.moveTo(mx-dx,my-dy);pc.lineTo(mx+dx,my+dy);pc.stroke();
@@ -484,10 +484,10 @@ $('pvon').onchange=()=>{$('pvw').hidden=!$('pvon').checked;lastT=-1};for(const i
 const dl=(n,t,m)=>{const a=document.createElement('a');a.href=URL.createObjectURL(t instanceof Blob?t:new Blob([t],{type:m}));a.download=n;a.click()};
 const kcsv=ids=>'part,property,frame,time_s,value,easing,reason\n'+ids.flatMap(id=>KP.flatMap(p=>(K[id]?.[p]||[]).map(q=>[D[id].n,p,q.i,(q.i/fps).toFixed(4),q.v*U(p),easeName(q.e),q.why].join(',')))).join('\n');
 const fcsv=ids=>'part,frame,time_s,rotation,x,y,joint_angle,length,ang_vel,pos_vel,confidence\n'+ids.flatMap(id=>S[id].rot.map((_,i)=>[D[id].n,i,(i/fps).toFixed(4),...['rot','x','y','jt','len','vrot','vpos','c'].map(p=>S[id][p][i]*U(p))].join(','))).join('\n');
-$('csv').onclick=()=>{if(!frames.length)return st('Analyze first.');const sc=$('xs').value,ids=sc.startsWith('sel')?[sel]:act();dl('vid2anim.csv',sc.endsWith('all')?fcsv(ids):kcsv(ids),'text/csv')};
+$('csv').onclick=()=>{if(!frames.length)return st('Analyze first.');const sc=$('xs').value,ids=sc.startsWith('sel')?[sel]:act();dl('rovio.csv',sc.endsWith('all')?fcsv(ids):kcsv(ids),'text/csv')};
 const SET=['rig','mdl','smart','np','cd','cp','ct','mv','fps','sm','sP','sR','sJ','lf','preset','kR','kP','kMin','kMax','coord','off','wrap','t0','t1','xs','thr','dtol','lmask','fpad','eng','ddet','held','lock','cam','stab','stabT'];
 const gs=()=>Object.fromEntries(SET.map(i=>[i,$(i).type==='checkbox'?$(i).checked:$(i).value])),ss=o=>{for(const i in o){if(!$(i))continue;if($(i).type==='checkbox')$(i).checked=o[i];else $(i).value=o[i]}};
-$('json').onclick=()=>frames.length?dl('vid2anim_analysis.json',JSON.stringify({meta,settings:gs(),removedParts:[...OFF],landmarksRaw:frames,corrections:CORR,landmarksCorrected:EF,segments:D,rawSeries:RF,smoothedSeries:S,keyframes:K}),'application/json'):st('Analyze first.');
+$('json').onclick=()=>frames.length?dl('rovio_analysis.json',JSON.stringify({meta,settings:gs(),removedParts:[...OFF],landmarksRaw:frames,corrections:CORR,landmarksCorrected:EF,segments:D,rawSeries:RF,smoothedSeries:S,keyframes:K}),'application/json'):st('Analyze first.');
 $('gpng').onclick=()=>{if(!S[sel])return st('Analyze first.');const c=document.createElement('canvas');c.width=1400;c.height=420;drawGraph(c,prop,[0,frames.length-1]);c.toBlob(b=>dl(`graph_${sel}_${prop}.png`,b))};
 $('copyT').onclick=()=>{const k=KS();if(k)navigator.clipboard.writeText('frame,time,value,easing\n'+k.map(q=>[q.i,(q.i/fps).toFixed(3),q.v*U(prop),easeName(q.e)].join(',')).join('\n'))};
 async function sheet(){if(!S[sel])return st('Analyze first.');st('Building reference sheet…');const n=frames.length,c=document.createElement('canvas');c.width=900;c.height=260;
@@ -495,7 +495,7 @@ async function sheet(){if(!S[sel])return st('Analyze first.');st('Building refer
  const gh=KP.filter(p=>K[sel]?.[p]).map(p=>{drawGraph(c,p,[0,n-1]);return`<h3>${PROPS[p]}</h3><img src="${c.toDataURL('image/png')}" width=900>${tbl(p)}`}).join('');
  const k=K[sel].rot,pick=k.length>16?k.filter((_,j)=>j%Math.ceil(k.length/16)===0):k,tc=document.createElement('canvas'),tw=200,th=Math.round(tw*VH()/VW());tc.width=tw;tc.height=th;const t0=V.currentTime;let ft='';
  if(V.videoWidth)for(const q of pick){await seek(start+q.i/fps);tc.getContext('2d').drawImage(V,0,0,tw,th);ft+=`<figure><img src="${tc.toDataURL('image/jpeg',.7)}"><figcaption>f${q.i} · ${(q.i/fps).toFixed(2)}s · ${f3(dv('rot',q.v))}°</figcaption></figure>`}await seek(t0);
- dl(`reference_${sel}.html`,`<!doctype html><meta charset=utf-8><title>vid2anim ${D[sel].n}</title><style>body{font:13px sans-serif;margin:20px}table{border-collapse:collapse;margin:6px 0}td,th{border:1px solid #bbb;padding:3px 8px}figure{display:inline-block;margin:4px}</style><h1>vid2anim — ${D[sel].n}</h1><p>${meta.name||''} · ${fps} fps · rotation offset ${$('off').value}° · units: ${$('coord').value}</p><h2>Frames at rotation keyframes</h2>${ft}${gh}`,'text/html');st('Reference sheet saved (open it and print / save as PDF).')}
+ dl(`reference_${sel}.html`,`<!doctype html><meta charset=utf-8><title>Rovio ${D[sel].n}</title><style>body{font:13px sans-serif;margin:20px}table{border-collapse:collapse;margin:6px 0}td,th{border:1px solid #bbb;padding:3px 8px}figure{display:inline-block;margin:4px}</style><h1>Rovio — ${D[sel].n}</h1><p>${meta.name||''} · ${fps} fps · rotation offset ${$('off').value}° · units: ${$('coord').value}</p><h2>Frames at rotation keyframes</h2>${ft}${gh}`,'text/html');st('Reference sheet saved (open it and print / save as PDF).')}
 $('sheet').onclick=sheet;
 // ---- sessions (IndexedDB)
 const tx=(m,f)=>new Promise((res,rej)=>{const q=indexedDB.open('motiontrace',1)/* DB name kept so sessions saved before the rename still open */;q.onupgradeneeded=()=>q.result.createObjectStore('s',{keyPath:'name'});q.onerror=()=>rej(q.error);q.onsuccess=()=>{const t=q.result.transaction('s',m),r=f(t.objectStore('s'));t.oncomplete=()=>res(r.result);t.onerror=t.onabort=()=>rej(t.error)}});
@@ -545,9 +545,9 @@ function agDraw(force){if($('ag').hidden)return;const ids=S.head?act():[],n=fram
 $('allg').onclick=()=>{$('agp').value=prop;$('ag').hidden=false;agDraw(true)};$('agx').onclick=()=>$('ag').hidden=true;$('agp').onchange=()=>agDraw(true);
 $('agg').onclick=e=>{const c=e.target.closest('.agc');if(!c)return;sel=c.dataset.id;selKf=-1;const p=$('agp').value;if(KP.includes(p)){prop=p;$('prop').value=p}dirty=true};
 $('agg').ondblclick=()=>$('ag').hidden=true;
-$('agpng').onclick=()=>{const n=frames.length;if(!S.head||n<2)return st('Analyze first.');const ids=act(),pr=$('agp').value,cols=3,cw=620,ch=230,th=20,rows=Math.ceil(ids.length/cols),c=document.createElement('canvas');c.width=cols*cw;c.height=rows*(ch+th);const g=c.getContext('2d');g.fillStyle='#0d0f24';g.fillRect(0,0,c.width,c.height);
+$('agpng').onclick=()=>{const n=frames.length;if(!S.head||n<2)return st('Analyze first.');const ids=act(),pr=$('agp').value,cols=3,cw=620,ch=230,th=20,rows=Math.ceil(ids.length/cols),c=document.createElement('canvas');c.width=cols*cw;c.height=rows*(ch+th);const g=c.getContext('2d');g.fillStyle='#0a0a0b';g.fillRect(0,0,c.width,c.height);
  ids.forEach((id,j)=>{const t=document.createElement('canvas');t.width=cw;t.height=ch;drawGraph(t,pr,[0,n-1],false,id,true);const x=j%cols*cw,y=Math.floor(j/cols)*(ch+th);g.drawImage(t,x,y+th);g.fillStyle='#d6d9de';g.font='13px sans-serif';g.fillText(`${D[id].n} · ${PROPS[pr]}`,x+8,y+14)});
- c.toBlob(b=>dl(`vid2anim_all_parts_${pr}.png`,b))};
+ c.toBlob(b=>dl(`rovio_all_parts_${pr}.png`,b))};
 listS();init();
 
 // ---- sidebar tabs
@@ -555,4 +555,4 @@ function showTab(t){for(const b of $('tabs').querySelectorAll('button'))b.classL
 $('tabs').onclick=e=>{const t=e.target.dataset?.tab;if(t)showTab(t)};
 try{showTab(localStorage.getItem('vid2anim.tab')||'scan')}catch{showTab('scan')}
 // ---- Alight Motion export (alight.js): XML project and calibration file
-initAlight({$,st,dl,curve,act,K:()=>K,S:()=>S,D:()=>D,fps:()=>fps,n:()=>frames.length,W:VW,H:VH,off:()=>+$('off').value||0,title:()=>(meta&&meta.name)||'vid2anim'});
+initAlight({$,st,dl,curve,act,K:()=>K,S:()=>S,D:()=>D,fps:()=>fps,n:()=>frames.length,W:VW,H:VH,off:()=>+$('off').value||0,title:()=>(meta&&meta.name)||'Rovio'});
