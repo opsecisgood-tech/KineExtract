@@ -82,8 +82,8 @@
 <label>Easing stored on<select id="amEase"><option value="arrive" selected>Arriving keyframe</option><option value="depart">Departing keyframe</option></select></label>
 <label><input id="amInv" type="checkbox"> Invert rotation direction</label>
 <label>Layer order in the file<select id="amOrder"><option value="bottom" selected>First layer = bottom</option><option value="top">First layer = top</option></select></label>
-<label>Shape size (half-extent, advanced)<input id="amSize" type="number" min="1" max="500" step="1" value="50"></label>
-<small>Alight Motion draws every bar at 2 × this value × the Scale shown below it. 50 is correct for current Alight Motion builds (verified against real 5.0.27x / file-format 106 exports) — only raise or lower it if, after this fix, parts still come out a consistent fraction of the right length. The SIZE row in the calibration project shows whether 50 is right for your build: that bar should reach almost edge to edge.</small></details>
+<label>Shape size (half-extent, advanced)<input id="amSize" type="number" min="1" max="500" step="1" value="100"></label>
+<small>Written into every shape as Alight Motion's own size property; the Scale values are computed to match it, so any value gives the same drawing. 100 is Alight Motion's default. Leave it alone unless the SIZE row in the calibration project does not reach almost edge to edge.</small></details>
 <label><input id="amSkip" type="checkbox"> Skip the review when both automatic checks pass</label>
 <button id="amCal">Calibration project (.xml)</button>
 <div class="row"><button id="amXml" class="go">Check &amp; download .xml</button><button id="amShare">Check &amp; share…</button></div>
@@ -143,4 +143,4 @@
 </div>
 <div class="agh"><label class="amok"><input id="amROk" type="checkbox"> I checked the preview and it looks right (manual check)</label><button id="amRDl" class="go" disabled>Download .xml</button><button id="amRSh" disabled>Share file…</button></div>
 </div>
-<script type="module" src="app.js?v=9"></script></body></html>
+<script type="module" src="app.js?v=10"></script></body></html>
