@@ -11,12 +11,11 @@
 //   5. CHECK 3        you look at the preview and confirm (manual check) before the file can be saved.
 //   If something is wrong you can let the auto-fix move parts apart or move/hide parts yourself.
 //
-// v7: every shape now carries an explicit <size> (half-extent) tag alongside <scale>. Without it, Alight Motion fell
-// back to its own default half-extent instead of the one our Scale math assumes, which is what made every bar come
-// out a consistent fraction of its intended length ("bunched" limbs) once a real export was opened in the app,
-// even though our own preview — built from the same geometry model — looked right the whole time. Default size is
-// 50 (so a rect's drawn size is 2×50×scale = 100×scale, matching the existing "/100" convention used everywhere
-// below); "Shape size" in Compatibility exposes it in case a future AM build changes the real default.
+// v8: shape size is now written the way real Alight Motion exports do it: <property name="size" type="vec2" value="100,100"/>
+// as a direct child of <shape>. v7 wrote <size .../> inside <transform>, which Alight Motion does not read, so it drew every
+// bar at its own default half-extent while our scale math assumed another one: bars came out the wrong size and overlapped
+// in the app although our own preview (same geometry model) looked right. Drawn size = 2 × size × scale; default size 100
+// (AM's own default), so even a dropped property gives the same result.
 
 /* ───────── helpers ───────── */
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -302,14 +301,15 @@ function emit(M,dyn){
       return[v[0]*cw+m[0]+(d?d[2*fi]:0),v[1]*ch+m[1]+(d?d[2*fi+1]:0)]}});
   };
   const rotCh=id=>channel('rotation',id,['rot'],v=>f6(sgn*(v[0]+M.off)));
-  // Alight Motion's .rect draws at 2 × size × scale (size = half-extent; verified against real 5.0.27x/ffver106 exports).
-  // Every shape below must carry an explicit <size>, or AM falls back to its own default half-extent instead of ours —
-  // that mismatch is what was making every bar come out a consistent fraction of its intended length ("bunched" limbs).
-  const szVal=(Number.isFinite(+o.size)&&+o.size>0)?+o.size:50,sdiv=2*szVal,SZ=`<size value="${f6(szVal)},${f6(szVal)}"/>`;
+  // Alight Motion's .rect draws at 2 × size × scale (size = half-extent). In real AM exports the size is NOT a transform tag:
+  // it is <property name="size" type="vec2" value="w,h"/> as a direct child of <shape> (after fillColor/effects), default 100,100.
+  // A <size> tag inside <transform> is ignored by AM, so it drew at its own default and every bar was off by default/ours (overlaps).
+  // We write the property explicitly on every shape and default to 100 (AM's own default) so both paths agree.
+  const szVal=(Number.isFinite(+o.size)&&+o.size>0)?+o.size:100,sdiv=2*szVal,SZ=`<property name="size" type="vec2" value="${f6(szVal)},${f6(szVal)}"/>`;
   const WHITE='#FFFFFFFF',BLACK='#FF000000',items=[];
   if(!stick){
     for(const id of ids){const d=D[id],thick=M.thick(id);
-      items.push({pid:id,role:'main',label:d.n,sid:'.rect',color:sideColor(d),tf:[locCh(id),SZ,channel('scale',id,['len'],v=>`${f6(Math.max(.001,v[0]*ch/sdiv))},${f6(Math.max(.001,thick/sdiv))}`),rotCh(id)]})}
+      items.push({pid:id,role:'main',label:d.n,sid:'.rect',color:sideColor(d),tf:[locCh(id),channel('scale',id,['len'],v=>`${f6(Math.max(.001,v[0]*ch/sdiv))},${f6(Math.max(.001,thick/sdiv))}`),rotCh(id)]})}
   }else{
     // Stickman: every part is a thin white bar. The thin black edge is a slightly bigger black bar underneath (so it only uses the same
     // rectangle + colour tags as the classic look). All edges go under all white bars, which makes the joints merge into one clean outline.
@@ -317,13 +317,13 @@ function emit(M,dyn){
     for(const id of lines)pre[id]={loc:locCh(id),rot:rotCh(id)};
     // each bar is lengthened by one line width so neighbouring bars overlap at the joints instead of leaving notches
     const sclOf=(id,pad)=>channel('scale',id,['len'],v=>`${f6(Math.max(.001,(v[0]*ch+lineW+pad)/sdiv))},${f6(Math.max(.001,(lineW+pad)/sdiv))}`);
-    if(edge>0)for(const id of lines)items.push({pid:id,role:'edge',label:D[id].n+' edge',sid:'.rect',color:BLACK,tf:[pre[id].loc,SZ,sclOf(id,2*edge),pre[id].rot]});
-    for(const id of lines)items.push({pid:id,role:'main',label:D[id].n,sid:'.rect',color:WHITE,tf:[pre[id].loc,SZ,sclOf(id,0),pre[id].rot]});
+    if(edge>0)for(const id of lines)items.push({pid:id,role:'edge',label:D[id].n+' edge',sid:'.rect',color:BLACK,tf:[pre[id].loc,sclOf(id,2*edge),pre[id].rot]});
+    for(const id of lines)items.push({pid:id,role:'main',label:D[id].n,sid:'.rect',color:WHITE,tf:[pre[id].loc,sclOf(id,0),pre[id].rot]});
     if(ids.includes('head')){
       // square head: a plain white square (same .rect shape as the bars) with a slightly bigger black square under it
       const loc=locCh('head'),sq=d=>`<scale value="${f6(d/sdiv)},${f6(d/sdiv)}"/>`;
-      if(edge>0)items.push({pid:'head',role:'edge',label:'Head edge',sid:'.rect',color:BLACK,tf:[loc,SZ,sq(hd+2*edge)]});
-      items.push({pid:'head',role:'main',label:'Head',sid:'.rect',color:WHITE,tf:[loc,SZ,sq(hd)]});
+      if(edge>0)items.push({pid:'head',role:'edge',label:'Head edge',sid:'.rect',color:BLACK,tf:[loc,sq(hd+2*edge)]});
+      items.push({pid:'head',role:'main',label:'Head',sid:'.rect',color:WHITE,tf:[loc,sq(hd)]});
     }
   }
   if(o.order==='top')items.reverse();
@@ -332,6 +332,7 @@ function emit(M,dyn){
       ${it.tf.join('\n      ')}
     </transform>
     <fillColor value="${it.color}"/>
+    ${SZ}
   </shape>`).join('\n');
   const title=(o.title||'vid2anim').slice(0,60);
   const xml=`<?xml version="1.0" encoding="UTF-8"?>
@@ -357,7 +358,8 @@ function parseScene(xml){
   for(const m of xml.matchAll(/<shape\b([^>]*)>([\s\S]*?)<\/shape>/g)){
     const L={id:attr(m[1],'id'),label:attr(m[1],'label'),start:+attr(m[1],'startTime'),end:+attr(m[1],'endTime'),shape:attr(m[1],'s'),ch:{}};
     L.color=(m[2].match(/<fillColor value="([^"]*)"/)||[])[1];
-    for(const tag of['location','scale','rotation','size']){
+    const sp=m[2].match(/<property\s+name="size"\s+type="vec2"\s+value="([^"]*)"\s*\/>/);if(sp)L.ch.size={v:sp[1].split(',').map(Number)};
+    for(const tag of['location','scale','rotation']){
       const st=m[2].match(new RegExp(`<${tag}\\s+value="([^"]*)"\\s*/>`));
       if(st){L.ch[tag]={v:st[1].split(',').map(Number)};continue}
       const kb=m[2].match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`));
@@ -410,7 +412,7 @@ function check2(M,em,dyn){
   const lay=P.layers.map((L,li)=>({L,meta:em.items[li]||{}}));
   const geomAt=i=>lay.map(({L,meta})=>{
     const loc=evalCh(L.ch.location,i,o,toF),sc=evalCh(L.ch.scale,i,o,toF),rot=L.ch.rotation?evalCh(L.ch.rotation,i,o,toF)[0]:0;
-    const sz=L.ch.size?evalCh(L.ch.size,i,o,toF):[50,50]; // 50 = this file's own convention if a shape somehow lacks the tag
+    const sz=L.ch.size?evalCh(L.ch.size,i,o,toF):[100,100]; // 100 = Alight Motion's own default if a shape somehow lacks the property
     return{pid:meta.pid,role:meta.role,cx:loc[0],cy:loc[1],w:2*sz[0]*sc[0],h:2*sz[1]*sc[1],ang:sgn*rot,color:L.color};
   });
   const segsAt=i=>geomAt(i).filter(g=>g.role==='main'&&g.pid).map(g=>{
@@ -456,21 +458,22 @@ export function buildCalibration(o){
       ${loc}${extra}
     </transform>
     <fillColor value="${color}"/>
+    ${szTag}
   </shape>`;
   const mv=(y,k)=>`<location>\n        ${k.map(([t,x,e])=>`<kf t="${t}" v="${x}.000000,${y}.000000,0.000000"${e?` e="${e}"`:''}/>`).join('\n        ')}\n      </location>`;
-  const szVal=(Number.isFinite(+o.size)&&+o.size>0)?+o.size:50,szTag=`<size value="${f6(szVal)},${f6(szVal)}"/>`;
-  const sc=`\n      ${szTag}\n      <scale value="1.200000,1.200000"/>`;
+  const szVal=(Number.isFinite(+o.size)&&+o.size>0)?+o.size:100,szTag=`<property name="size" type="vec2" value="${f6(szVal)},${f6(szVal)}"/>`;
+  const sc=`\n      <scale value="1.200000,1.200000"/>`;
   const sizeScale=(880/(2*szVal)).toFixed(6); // bar width = 2 × szVal × scale, aimed at 880px of the 1080 canvas
   const layers=[
     mk(1,'TIME A - fraction mode: must ARRIVE at right edge exactly when clip ENDS','#FF3DE8FF',mv(200,[['0.000000000',160],['1.000000000',920]]),sc),
     mk(2,'TIME B - seconds mode: must ARRIVE at right edge exactly when clip ENDS','#FFFF8A4C',mv(380,[['0.000000000',160],['4.000000000',920]]),sc),
     mk(3,'EASE arrive-key: sits almost still in first half, then rushes (= easing is on ARRIVING key)','#FFFC01E6',mv(560,[[tt(0),160],[tt(.5),540,'cubicBezier 0.9 0 1 0.1'],[tt(1),920]]),sc),
     mk(4,'EASE depart-key: control, easing placed on DEPARTING key','#FF3DFFA6',mv(740,[[tt(0),160,'cubicBezier 0.9 0 1 0.1'],[tt(.5),540],[tt(1),920]]),sc),
-    mk(5,'ROTATION - bar must turn CLOCKWISE and point DOWN at the end','#FFFFE45E',`<location value="540.000000,900.000000,0.000000"/>`,`\n      ${szTag}\n      <scale value="2.500000,0.300000"/>\n      <rotation>\n        <kf t="${tt(0)}" v="0.000000"/>\n        <kf t="${tt(1)}" v="90.000000"/>\n      </rotation>`),
+    mk(5,'ROTATION - bar must turn CLOCKWISE and point DOWN at the end','#FFFFE45E',`<location value="540.000000,900.000000,0.000000"/>`,`\n      <scale value="2.500000,0.300000"/>\n      <rotation>\n        <kf t="${tt(0)}" v="0.000000"/>\n        <kf t="${tt(1)}" v="90.000000"/>\n      </rotation>`),
     mk(6,'HEAD - must be a white SQUARE (same shape as the bars)','#FFFFFFFF',`<location value="160.000000,950.000000,0.000000"/>`,sc),
     mk(7,'ORDER first in file - RED square','#FFFF2D2D',`<location value="780.000000,950.000000,0.000000"/>`,sc),
     mk(8,'ORDER second in file - BLUE square: if BLUE covers RED then first layer = bottom, if RED covers BLUE set "First layer = top"','#FF2D6BFF',`<location value="830.000000,985.000000,0.000000"/>`,sc),
-    mk(9,'SIZE - this bar must reach almost edge to edge (880 of 1080 px). If it stops well short (eg. around the middle), raise "Shape size" in Compatibility until it does','#FF8AFF3D',`<location value="540.000000,80.000000,0.000000"/>`,`\n      ${szTag}\n      <scale value="${sizeScale},0.300000"/>`)
+    mk(9,'SIZE - this bar must reach almost edge to edge (880 of 1080 px)','#FF8AFF3D',`<location value="540.000000,80.000000,0.000000"/>`,`\n      <scale value="${sizeScale},0.300000"/>`)
   ].join('\n');
   // note: layers 1,3,4 are fraction-mode; layer 2 is seconds-mode. The scene stays valid either way, the wrong one simply overshoots.
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -489,7 +492,7 @@ export function initAlight(c){
   try{const s=JSON.parse(localStorage.getItem(LS)||'{}');for(const i of F)if(i in s&&$(i)){if($(i).type==='checkbox')$(i).checked=s[i];else $(i).value=s[i]}}catch{}
   const save=()=>{try{localStorage.setItem(LS,JSON.stringify(Object.fromEntries(F.map(i=>[i,get(i)]))))}catch{}};
   for(const i of F)$(i).addEventListener('change',save);
-  const opts=()=>({long:+get('amLong'),bg:get('amBg'),thick:+get('amThick')||100,tmode:get('amTime'),easeOn:get('amEase'),dense:get('amDense')==='dense',fps:get('amFps'),inv:get('amInv'),style:get('amStyle')||'stick',edge:$('amEdge')?+get('amEdge'):2,headPct:+get('amHead')||100,order:get('amOrder')||'bottom',size:$('amSize')?+get('amSize')||50:50,title:c.title()});
+  const opts=()=>({long:+get('amLong'),bg:get('amBg'),thick:+get('amThick')||100,tmode:get('amTime'),easeOn:get('amEase'),dense:get('amDense')==='dense',fps:get('amFps'),inv:get('amInv'),style:get('amStyle')||'stick',edge:$('amEdge')?+get('amEdge'):2,headPct:+get('amHead')||100,order:get('amOrder')||'bottom',size:$('amSize')?+get('amSize')||100:100,title:c.title()});
   const safe=s=>(s||'vid2anim').replace(/\.[^.]+$/,'').replace(/[^\w\- ]+/g,'_').slice(0,40)||'vid2anim';
   const msg=t=>{$('amMsg').textContent=t;st(t)};
   // adjustments made in the review (auto-fix switch, parts moved by hand, parts left out); reset when a different analysis is loaded
