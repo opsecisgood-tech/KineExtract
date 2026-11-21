@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rovio · Create. Edit. Export.</title><meta name="description" content="Rovio turns video into animation. Processed locally in your browser."><meta name="theme-color" content="#121214"><link rel="icon" type="image/png" href="favicon.png"><link rel="icon" href="favicon.ico" sizes="any"><link rel="apple-touch-icon" href="apple-touch-icon.png"><link rel="manifest" href="site.webmanifest"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600;700&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css?v=2"></head>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rovio · Create. Edit. Export.</title><meta name="description" content="Rovio turns video into animation. Processed locally in your browser."><meta name="theme-color" content="#121214"><link rel="icon" type="image/png" href="favicon.png"><link rel="icon" href="favicon.ico" sizes="any"><link rel="apple-touch-icon" href="apple-touch-icon.png"><link rel="manifest" href="site.webmanifest"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600;700&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css?v=3"></head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
 <symbol id="i-home" viewBox="0 0 24 24"><path d="M12 2.8 2.6 11.2a.8.8 0 0 0 .5 1.4H5V20a1.2 1.2 0 0 0 1.2 1.2H9.6v-6h4.8v6h3.4A1.2 1.2 0 0 0 19 20v-7.4h1.9a.8.8 0 0 0 .5-1.4z"/></symbol>
@@ -17,7 +17,7 @@
 <div class="app">
 <nav class="side" aria-label="Main">
 <a class="logo" href="#home" aria-label="Rovio home"><img src="logo-light.png" alt="Rovio" width="150" height="46"></a>
-<button class="nv on" data-go="home"><svg class="ic"><use href="#i-home"/></svg><span>Home</span></button><button class="nv" data-go="projects"><svg class="ic"><use href="#i-folder"/></svg><span>Projects</span></button><button class="nv" data-go="tools"><svg class="ic"><use href="#i-tools"/></svg><span>Tools</span></button><button class="nv" data-go="settings"><svg class="ic"><use href="#i-gear"/></svg><span>Settings</span></button><button class="nv" data-go="about"><svg class="ic"><use href="#i-help"/></svg><span>About</span></button>
+<button class="nv on" data-go="home"><svg class="ic"><use href="#i-home"/></svg><span>Home</span></button><button class="nv" data-go="projects"><svg class="ic"><use href="#i-folder"/></svg><span>Projects</span></button><button class="nv" data-go="tools" hidden><svg class="ic"><use href="#i-tools"/></svg><span>Tools</span></button><button class="nv" data-go="settings"><svg class="ic"><use href="#i-gear"/></svg><span>Settings</span></button><button class="nv" data-go="about"><svg class="ic"><use href="#i-help"/></svg><span>About</span></button>
 <div class="sidecard"><img src="logo-mark.png" alt="" width="40" height="40"><b>Rovio</b><small>Create. Edit. Export.</small></div>
 </nav>
 <div class="shell">
@@ -46,7 +46,7 @@
 </div></div>
 <div class="view pg" id="v-projects"><div class="pgwrap"><div>
 <h1 class="pt">Projects</h1><p class="pd">Saved sessions on this device. Star the ones you use most.</p>
-<div class="bar"><button class="bigbtn" id="pjNew"><svg class="ic"><use href="#i-plus"/></svg>New Project</button><button id="pjSave">Save current session</button></div>
+<div class="bar"><button class="bigbtn" id="pjNew"><svg class="ic"><use href="#i-plus"/></svg>New Project</button><button id="pjSave" hidden>Save current session</button></div>
 <div class="pj-grid" id="pjGrid"></div></div><div class="grow"></div><div class="pgfoot"><span>© 2026 Rovio. All rights reserved.</span><nav><a href="#privacy">Privacy</a><a href="#terms">Terms</a><a href="#contact">Contact</a></nav></div></div></div>
 <div class="view" id="v-tools">
 <header>
@@ -167,7 +167,7 @@
 <div id="gw"><canvas id="graph"></canvas></div></footer>
 </div>
 <div class="view pg" id="v-settings"><div class="pgwrap"><div>
-<h1 class="pt">Settings</h1><p class="pd">Tracking, smoothing and export options live in <a href="#tools" style="color:var(--red-hi)">Tools</a>. This page manages what Rovio keeps on your device.</p>
+<h1 class="pt">Settings</h1><p class="pd">Tracking, smoothing and export options appear in the Tools workspace when you start or open a project. This page manages what Rovio keeps on your device.</p>
 <div class="box"><h3>Downloaded models</h3><p>The person-tracking models download once (about 350 MB) and stay cached so later analyses start instantly.</p><p id="stStore" class="m">Checking storage…</p><div class="row"><button id="stClear">Clear downloaded models</button></div><span class="msg" id="stMsg"></span></div>
 <div class="box"><h3>Activity &amp; favorites</h3><p>Clears the Recent Activity card and your starred projects. Saved sessions are not deleted.</p><div class="row"><button id="stReset">Clear activity &amp; favorites</button></div></div>
 </div><div class="grow"></div><div class="pgfoot"><span>© 2026 Rovio. All rights reserved.</span><nav><a href="#privacy">Privacy</a><a href="#terms">Terms</a><a href="#contact">Contact</a></nav></div></div></div>
@@ -209,4 +209,4 @@
 </div>
 <div class="agh"><label class="amok"><input id="amROk" type="checkbox"> I checked the preview and it looks right (manual check)</label><button id="amRDl" class="go" disabled>Download .xml</button><button id="amRSh" disabled>Share file…</button></div>
 </div>
-<script type="module" src="app.js?v=11"></script><script type="module" src="rovio.js?v=1"></script></body></html>
+<script type="module" src="app.js?v=11"></script><script type="module" src="rovio.js?v=2"></script></body></html>
