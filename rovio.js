@@ -11,7 +11,7 @@ const PAGES = ['home', 'projects', 'tools', 'settings', 'about'];
 /* ---------- navigation (hash based, so pages can be bookmarked) ---------- */
 let current = 'home';
 let lastPage = 'home';   // where the back arrow in Tools returns to
-// Tools only exist while a project is active: started with New Project (or Open) and ended by Save.
+// Tools only exist while a project is active: started with New Project (or Open) and ended by Save or by leaving the editor.
 let active = false;
 const toolsBtn = document.querySelector('.side .nv[data-go="tools"]');
 function setActive(v) {
@@ -35,7 +35,12 @@ function route() {
   const h = decodeURIComponent(location.hash.slice(1));
   if (h === 'tools' && !active) { history.replaceState(null, '', '#home'); return show('home'); }
   const next = PAGES.includes(h) ? h : 'home';
-  if (current === 'tools' && next !== 'tools') leaveProject();   // leaving Tools with edits: keep them as an autosaved project
+  if (current === 'tools' && next !== 'tools' && active) {
+    // Leaving the editor ends the project: edits are autosaved (leaveProject reads `active` before its first await),
+    // the Tools tab disappears, and the project is reopened from Projects.
+    leaveProject();
+    setActive(false);
+  }
   show(next);
 }
 const go = page => { if (location.hash === '#' + page) route(); else location.hash = page; };
@@ -144,7 +149,7 @@ new MutationObserver(() => {
 
 /* ---------- top bar / fullscreen tools ---------- */
 $('rvq').addEventListener('input', () => { if (current !== 'projects') go('projects'); else renderProjects(); });
-// Tools is fullscreen; the back arrow leaves it at any time. The project stays open (Tools stays in the sidebar).
+// Tools is fullscreen; the back arrow leaves it at any time. That ends the project (route() autosaves it and hides Tools).
 $('tlBack').onclick = () => go(lastPage);
 
 /* ---------- settings ---------- */
