@@ -1,6 +1,6 @@
 import {PoseLandmarker,FilesetResolver} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
-import {initAlight} from './alight.js?v=9';
-import {initBG} from './bg.js?v=1';
+import {initAlight} from './alight.js?v=10';
+import {initBG} from './bg.js?v=2';
 const $=i=>document.getElementById(i),V=$('v'),O=$('ov'),ox=O.getContext('2d'),G=$('graph'),EC=$('ezc'),ec=EC.getContext('2d'),PV=$('pv'),pc=PV.getContext('2d'),crop=document.createElement('canvas'),cx=crop.getContext('2d');
 const WASM="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm",MURL=m=>`https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_${m}/float16/1/pose_landmarker_${m}.task`;
 let BGAPI=null,fs,delegate='GPU',LMs={},tsBase=0,frames=[],EF=[],R={},RF={},S={},K={},CORR=[],undo=[],redo=[],sel='head',prop='rot',selKf=-1,stop=false,view=[0,1],fps=15,start=0,dirty=true,endAt=null,lastT=-1,meta={},curFile=null,subj=null,picking=false,hov=null,rep={},lasso=null,lp=[],lassoing=false,drawingL=false,anchor=null,vel={x:0,y:0},BR=null,seed=null,ident=null,pickC=[],pickT=-1,lastPx=null;
@@ -347,7 +347,17 @@ async function verifySweeps(rounds){for(let r=1;r<=rounds&&!stop;r++){const sus=
 const seek=t=>new Promise(r=>{t=Math.min(t,V.duration);let d=false;const fin=()=>{if(d)return;d=true;V.onseeked=null;r()};
  if(Math.abs(V.currentTime-t)<1e-4)return setTimeout(fin,0);
  V.onseeked=()=>{if(V.requestVideoFrameCallback){V.requestVideoFrameCallback(fin);setTimeout(fin,150)}else setTimeout(fin,50)};V.currentTime=t});
-async function analyze(){if(!V.src)return st('Load a video first.');picking=false;O.style.cursor='';if(engine()==='mp'&&!fs)return st('MediaPipe model not ready yet.');
+// Pick subject / Lasso (and their Clear buttons) are greyed out while the analysis (and the background rebuild after it) runs,
+// and come back when it finishes or is cancelled.
+let analyzing=false;
+const TOOLBTN=['pick','pclear','lasso','lclear'];
+const lockTools=on=>{for(const i of TOOLBTN){const e=$(i);if(e)e.disabled=on}};
+async function analyze(){
+  if(analyzing)return;analyzing=true;lockTools(true);
+  lassoing=false;picking=false;drawingL=false;lp=[];$('lasso').classList.remove('on');O.style.cursor='';lastT=-1;
+  try{await analyzeRun()}finally{analyzing=false;lockTools(false)}
+}
+async function analyzeRun(){if(!V.src)return st('Load a video first.');picking=false;O.style.cursor='';if(engine()==='mp'&&!fs)return st('MediaPipe model not ready yet.');
  stop=false;V.pause();fps=+$('fps').value;start=+$('t0').value||0;const end=Math.min(+$('t1').value||V.duration,V.duration),n=Math.floor((end-start)*fps)+1;if(n<2)return st('Clip too short.');
  const lvl=$('smart').checked?$('thr').value:'off',rounds={off:0,fast:0,care:1,max:2}[lvl];
  if(engine()==='dw'){$('analyze').disabled=true;try{await ensureDW();st('Advanced tracker ready ('+dwEP+').')}catch(e){console.error(e);$('analyze').disabled=false;$('eng').value='mp';return st('Advanced tracker could not load ('+e.message+'). It needs internet access to download its models. Switched to MediaPipe: press Analyze to continue with that.')}}
@@ -425,7 +435,7 @@ function overlay(){const w=VW(),h=VH();if(O.width!==w){O.width=w;O.height=h;$('s
  if($('trail').checked&&S[sel]){const tl=+$('tl').value||30,q=S[sel],s0=Math.max(0,i-tl);ox.strokeStyle=C.sel+'88';ox.lineWidth=lw;ox.beginPath();for(let j=s0;j<=i;j++)j==s0?ox.moveTo(q.x[j]*w,q.y[j]*h):ox.lineTo(q.x[j]*w,q.y[j]*h);ox.stroke()}}
 const rel=e=>{const r=O.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height}};let cdrag=null,fdrag=null;const focusHit=p=>{const w=VW(),h=VH(),near=c=>Math.hypot((p.x-c.x)*w,(p.y-c.y)*h)<w*.03;if(subj&&near(subj))return'subj';const L=lasso&&lassoNow(EF[ci()]);return L&&near(L.c)?'lasso':null};
 function moveFocus(k,dx,dy){if(k==='subj'){subj={x:Math.min(1,Math.max(0,subj.x+dx)),y:Math.min(1,Math.max(0,subj.y+dy))};if(seed)seed.c={x:seed.c.x+dx,y:seed.c.y+dy};return}lasso={...lasso,pts:lasso.pts.map(([x,y])=>[x+dx,y+dy]),c:{x:lasso.c.x+dx,y:lasso.c.y+dy}};lasso.bb=bbOf(lasso.pts)}
-O.onpointerdown=e=>{const p=rel(e),i=ci();if(lassoing){lp=[[p.x,p.y]];drawingL=true;O.setPointerCapture(e.pointerId);lastT=-1;return}
+O.onpointerdown=e=>{if(analyzing)return;const p=rel(e),i=ci();if(lassoing){lp=[[p.x,p.y]];drawingL=true;O.setPointerCapture(e.pointerId);lastT=-1;return}
  if(picking){picking=false;const ok_=pickC.length&&Math.abs(V.currentTime-pickT)<.02;
   if(pickC.length&&!ok_){pickC=[];lastT=-1;return st('The frame changed after the people were detected. Press Pick subject again.')}
   let k=-1,bd=.7;if(ok_)pickC.forEach((l,n)=>{const d=skelDist(l,p);if(d<bd){bd=d;k=n}});
@@ -487,7 +497,7 @@ const dl=(n,t,m)=>{const a=document.createElement('a');a.href=URL.createObjectUR
 const kcsv=ids=>'part,property,frame,time_s,value,easing,reason\n'+ids.flatMap(id=>KP.flatMap(p=>(K[id]?.[p]||[]).map(q=>[D[id].n,p,q.i,(q.i/fps).toFixed(4),q.v*U(p),easeName(q.e),q.why].join(',')))).join('\n');
 const fcsv=ids=>'part,frame,time_s,rotation,x,y,joint_angle,length,ang_vel,pos_vel,confidence\n'+ids.flatMap(id=>S[id].rot.map((_,i)=>[D[id].n,i,(i/fps).toFixed(4),...['rot','x','y','jt','len','vrot','vpos','c'].map(p=>S[id][p][i]*U(p))].join(','))).join('\n');
 $('csv').onclick=()=>{if(!frames.length)return st('Analyze first.');const sc=$('xs').value,ids=sc.startsWith('sel')?[sel]:act();dl('rovio.csv',sc.endsWith('all')?fcsv(ids):kcsv(ids),'text/csv')};
-const SET=['rig','mdl','smart','np','cd','cp','ct','mv','fps','sm','sP','sR','sJ','lf','preset','kR','kP','kMin','kMax','coord','off','wrap','t0','t1','xs','thr','dtol','lmask','fpad','eng','ddet','held','lock','cam','stab','stabT','bgOn','bgMode','bgEvery'];
+const SET=['rig','mdl','smart','np','cd','cp','ct','mv','fps','sm','sP','sR','sJ','lf','preset','kR','kP','kMin','kMax','coord','off','wrap','t0','t1','xs','thr','dtol','lmask','fpad','eng','ddet','held','lock','cam','stab','stabT','bgOn','bgMode','bgEvery','bgDetail'];
 const gs=()=>Object.fromEntries(SET.map(i=>[i,$(i).type==='checkbox'?$(i).checked:$(i).value])),ss=o=>{for(const i in o){if(!$(i))continue;if($(i).type==='checkbox')$(i).checked=o[i];else $(i).value=o[i]}};
 $('json').onclick=()=>frames.length?dl('rovio_analysis.json',JSON.stringify({meta,settings:gs(),removedParts:[...OFF],landmarksRaw:frames,corrections:CORR,landmarksCorrected:EF,segments:D,rawSeries:RF,smoothedSeries:S,keyframes:K}),'application/json'):st('Analyze first.');
 $('gpng').onclick=()=>{if(!S[sel])return st('Analyze first.');const c=document.createElement('canvas');c.width=1400;c.height=420;drawGraph(c,prop,[0,frames.length-1]);c.toBlob(b=>dl(`graph_${sel}_${prop}.png`,b))};
@@ -502,10 +512,22 @@ $('sheet').onclick=sheet;
 // ---- sessions (IndexedDB)
 const tx=(m,f)=>new Promise((res,rej)=>{const q=indexedDB.open('motiontrace',1)/* DB name kept so sessions saved before the rename still open */;q.onupgradeneeded=()=>q.result.createObjectStore('s',{keyPath:'name'});q.onerror=()=>rej(q.error);q.onsuccess=()=>{const t=q.result.transaction('s',m),r=f(t.objectStore('s'));t.oncomplete=()=>res(r.result);t.onerror=t.onabort=()=>rej(t.error)}});
 const listS=async()=>{try{const k=await tx('readonly',s=>s.getAllKeys());$('sess').innerHTML=k.map(n=>`<option>${n}</option>`).join('')}catch{}};
-$('save').onclick=async()=>{if(!frames.length)return st('Analyze first.');const name=prompt('Session name',meta.name||'session');if(!name)return;const o={name,meta,fps,start,frames,CORR,set:gs(),K,sel,prop,lasso,anchor,subj,seed,off:[...OFF],bg:BGAPI?BGAPI.get():null};
- try{await tx('readwrite',s=>s.put({...o,video:curFile}));st('Session saved with video.')}catch(e){try{await tx('readwrite',s=>s.put({...o,video:null}));st('Saved without the video (storage limit). Reselect the video when reopening.')}catch(e2){st('Save failed: '+e2.message)}}listS()};
+// the part of a project that counts as "edits": the analysis, corrections, keyframes, removed parts, lasso, anchor and subject
+const sig=()=>JSON.stringify([frames.length,CORR,K,[...OFF],lasso,anchor,subj]);
+let savedSig=null;const mark=()=>{savedSig=sig()};
+const hasEdits=()=>!analyzing&&frames.length>0&&sig()!==savedSig;
+async function saveSession(name,auto){
+  const o={name,meta,fps,start,frames,CORR,set:gs(),K,sel,prop,lasso,anchor,subj,seed,off:[...OFF],bg:BGAPI?BGAPI.get():null};
+  try{await tx('readwrite',s=>s.put({...o,video:curFile}));mark();st(auto?`Autosaved as "${name}".`:'Session saved with video.')}
+  catch(e){try{await tx('readwrite',s=>s.put({...o,video:null}));mark();st(auto?`Autosaved as "${name}" without the video (storage limit). Reselect the video when reopening.`:'Saved without the video (storage limit). Reselect the video when reopening.')}catch(e2){st((auto?'Autosave':'Save')+' failed: '+e2.message);await listS();return false}}
+  await listS();return true}
+$('save').onclick=async()=>{if(!frames.length)return st('Analyze first.');const name=prompt('Session name',meta.name||'session');if(!name)return;await saveSession(name,false)};
+const nextUnnamed=async()=>{let k=[];try{k=await tx('readonly',s=>s.getAllKeys())}catch{}let m=0;for(const n of k){const r=/^Unnamed project (\d+)$/.exec(n);if(r)m=Math.max(m,+r[1])}return 'Unnamed project '+(m+1)};
+// used by rovio.js when you leave a project that has unsaved edits. Passing the name of an earlier autosave of the same project updates it.
+let asq=Promise.resolve();
+window.rovioProject={hasEdits,autosave:existing=>asq=asq.then(async()=>{if(!hasEdits())return null;const name=existing||await nextUnnamed();return(await saveSession(name,true))?name:null})};
 $('open').onclick=async()=>{const n=$('sess').value;if(!n)return;const o=await tx('readonly',s=>s.get(n));if(!o)return;ss(o.set);OFF.clear();(o.off||[]).forEach(id=>OFF.add(id));applyOff();BGAPI&&BGAPI.set(o.bg||null);subj=o.subj||null;seed=o.seed||null;ident=null;meta=o.meta;fps=o.fps;start=o.start;frames=(o.frames||[]).map(({cm,cb,...f})=>f);CORR=o.CORR||[];lasso=o.lasso||null;anchor=o.anchor||null;undo=[];redo=[];sel=o.sel;prop=o.prop;$('prop').value=prop;view=[0,Math.max(1,frames.length-1)];
- const fin=()=>{compute();K=o.K;selKf=-1;dirty=true;V.currentTime=start;st('Session opened.')};
+ const fin=()=>{compute();K=o.K;selKf=-1;dirty=true;V.currentTime=start;mark();st('Session opened.')};
  if(o.video){curFile=o.video;V.src=URL.createObjectURL(o.video);V.onloadedmetadata=()=>{$('scrub').max=V.duration;fin()}}else{fin();st('Opened without video — reselect the original video file to see playback.')}};
 $('del').onclick=async()=>{const n=$('sess').value;if(n&&confirm('Delete '+n+'?')){await tx('readwrite',s=>s.delete(n));listS()}};
 const clear=()=>{BGAPI&&BGAPI.clear();frames=[];EF=[];S={};R={};RF={};K={};CORR=[];undo=[];redo=[];selKf=-1;subj=null;seed=null;ident=null;pickC=[];lasso=null;anchor=null;lp=[];dirty=true;lastT=-1};
@@ -558,4 +580,4 @@ $('tabs').onclick=e=>{const t=e.target.dataset?.tab;if(t)showTab(t)};
 try{showTab(localStorage.getItem('vid2anim.tab')||'scan')}catch{showTab('scan')}
 // ---- Alight Motion export (alight.js): XML project and calibration file
 BGAPI=initBG({$,st,V,seek,frames:()=>frames,fps:()=>fps,start:()=>start,W:VW,H:VH,shifts:camShifts,isStop:()=>stop,resetStop:()=>{stop=false},redraw:()=>{lastT=-1}});
-initAlight({$,st,dl,curve,act,bg:()=>BGAPI?BGAPI.get():null,bgOn:()=>!!$('bgOn')&&$('bgOn').checked,K:()=>K,S:()=>S,D:()=>D,fps:()=>fps,n:()=>frames.length,W:VW,H:VH,off:()=>+$('off').value||0,title:()=>(meta&&meta.name)||'Rovio'});
+initAlight({$,st,dl,curve,act,bg:()=>BGAPI?BGAPI.get():null,paintBg:(g,w,h,i,q)=>BGAPI?BGAPI.paint(g,w,h,i,q):false,bgOn:()=>!!$('bgOn')&&$('bgOn').checked,K:()=>K,S:()=>S,D:()=>D,fps:()=>fps,n:()=>frames.length,W:VW,H:VH,off:()=>+$('off').value||0,title:()=>(meta&&meta.name)||'Rovio'});
