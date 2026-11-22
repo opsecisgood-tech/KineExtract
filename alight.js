@@ -1,4 +1,4 @@
-// Rovio → Alight Motion exporter (.xml project). Default look: white stickman, thin black edge, square head.
+// KineExtract → Alight Motion exporter (.xml project). Default look: white stickman, thin black edge, square head.
 // Pure browser, no dependencies. Wired up from app.js with initAlight(ctx).
 //
 // Export pipeline (v6):
@@ -62,7 +62,7 @@ const HEAVY=/^(head|neck|torso|utor3?|ltor3?|mtor|pelvis)$/; // parts that move 
 
 /* ───────── key planning ─────────
    A transform channel (location = x+y, scale = len, rotation = rot) can only have ONE set of keyframes in Alight Motion.
-   x and y have their own keyframes in vid2anim, so we take the union of their times. Where the original easing can't be carried over
+   x and y have their own keyframes in KineExtract, so we take the union of their times. Where the original easing can't be carried over
    exactly (different curves on x and y, elastic/bounce, or a union key that cuts an eased segment in two) the segment is baked
    with one key per frame, which reproduces the curve exactly. */
 function planKeys(arrs,n,dense){
@@ -365,7 +365,7 @@ function emit(M,dyn){
     ${it.fill||`<fillColor value="${it.color}"/>`}
     ${SZ}
   </shape>`).join('\n');
-  const title=(o.title||'Rovio').slice(0,60);
+  const title=(o.title||'KineExtract').slice(0,60);
   const xml=`<?xml version="1.0" encoding="UTF-8"?>
 <scene title="${esc(title)}" width="${cw}" height="${ch}" exportWidth="${cw}" exportHeight="${ch}" bgcolor="${o.bg}" totalTime="${totalMs}" fps="${projFps}" modifiedTime="${Date.now()}" amver="1028425" ffver="106" am="com.alightcreative.motion/5.0.273.1028425" amplatform="android">
 ${layers}
@@ -512,7 +512,7 @@ export function buildCalibration(o){
   ].join('\n');
   // note: layers 1,3,4 are fraction-mode; layer 2 is seconds-mode. The scene stays valid either way, the wrong one simply overshoots.
   return `<?xml version="1.0" encoding="UTF-8"?>
-<scene title="Rovio calibration" width="1080" height="1080" exportWidth="1080" exportHeight="1080" bgcolor="#FF121214" totalTime="${totalMs}" fps="30" modifiedTime="${Date.now()}" amver="1028425" ffver="106" am="com.alightcreative.motion/5.0.273.1028425" amplatform="android">
+<scene title="KineExtract calibration" width="1080" height="1080" exportWidth="1080" exportHeight="1080" bgcolor="#FF121214" totalTime="${totalMs}" fps="30" modifiedTime="${Date.now()}" amver="1028425" ffver="106" am="com.alightcreative.motion/5.0.273.1028425" amplatform="android">
 ${layers}
 </scene>
 `;
@@ -528,7 +528,7 @@ export function initAlight(c){
   const save=()=>{try{localStorage.setItem(LS,JSON.stringify(Object.fromEntries(F.map(i=>[i,get(i)]))))}catch{}};
   for(const i of F)$(i).addEventListener('change',save);
   const opts=()=>({long:+get('amLong'),bg:get('amBg'),thick:+get('amThick')||100,tmode:get('amTime'),easeOn:get('amEase'),dense:get('amDense')==='dense',fps:get('amFps'),inv:get('amInv'),style:get('amStyle')||'stick',edge:$('amEdge')?+get('amEdge'):2,headPct:+get('amHead')||100,order:get('amOrder')||'bottom',size:$('amSize')?+get('amSize')||100:100,title:c.title(),bgOn:c.bgOn?!!c.bgOn():false,bgQ:get('amBgQ')||'mid',bgAnim:get('amBgAnim')||'kf'});
-  const safe=s=>(s||'Rovio').replace(/\.[^.]+$/,'').replace(/[^\w\- ]+/g,'_').slice(0,40)||'Rovio';
+  const safe=s=>(s||'KineExtract').replace(/\.[^.]+$/,'').replace(/[^\w\- ]+/g,'_').slice(0,40)||'KineExtract';
   const msg=t=>{$('amMsg').textContent=t;st(t)};
   // adjustments made in the review (auto-fix switch, parts moved by hand, parts left out); reset when a different analysis is loaded
   let adj={auto:false,max:40,hide:new Set(),move:{}},adjKey='';
@@ -548,7 +548,7 @@ export function initAlight(c){
     el.textContent=`${g.cols} × ${g.rows} = ${g.parts} background parts · ${bg.mode==='moving'?'Moving':'Static'} · rebuilt every ${bg.every} frames (${bg.plates.length} captures, ${bg.pw} px wide).`+(g.parts>4000?' Very heavy: this is close to 1:1 with the picture, but Alight Motion may be slow or fail to open it on a phone. Set Background colour animation to Fixed colours to keep the file smaller.':g.parts>300?' This many layers can make Alight Motion slow on a phone.':'')+(q==='photo'&&bg.pw<=128?' Tip: set Scan → Background rebuild → Detail to High or Photo and capture again for a sharper result.':'');
   };
   if($('amBgQ'))$('amBgQ').addEventListener('change',bgInfo);
-  window.addEventListener('rovio-bg',bgInfo);bgInfo();
+  window.addEventListener('kineextract-bg',bgInfo);bgInfo();
   const hasReview=['amRev','amRCv','amRDl','amROk'].every(i=>$(i));
   // ---- review dialog (checks 1 + 2 results, preview, fixes, manual check 3)
   const R={r:null,frame:0,act:'dl',timer:0,bakedMove:{}};
@@ -568,7 +568,7 @@ export function initAlight(c){
       const cm=adj.move[L.pid]||[0,0],bm=R.bakedMove[L.pid]||[0,0],ex=cm[0]-bm[0],ey=cm[1]-bm[1];
       x.save();x.translate((L.cx+ex)*sc,(L.cy+ey)*sc);x.rotate(L.ang*Math.PI/180);
       x.fillStyle=col(L.color);x.fillRect(-L.w*sc/2,-L.h*sc/2,L.w*sc,L.h*sc);
-      if(L.role==='main'&&hit.has(L.pid)){x.strokeStyle='#ff2d55';x.lineWidth=2;x.strokeRect(-L.w*sc/2-1,-L.h*sc/2-1,L.w*sc+2,L.h*sc+2)}
+      if(L.role==='main'&&hit.has(L.pid)){x.strokeStyle='#ffb020';x.lineWidth=2;x.strokeRect(-L.w*sc/2-1,-L.h*sc/2-1,L.w*sc+2,L.h*sc+2)}
       if(L.role==='main'&&L.pid===sel){x.strokeStyle='#3de8ff';x.lineWidth=2;x.strokeRect(-L.w*sc/2-3,-L.h*sc/2-3,L.w*sc+6,L.h*sc+6)}
       x.restore()}
     $('amRTi').textContent=`frame ${R.frame} / ${c.n()-1} · ${hit.size?hit.size+' parts overlapping here':'no overlaps in this frame'}`;
@@ -648,5 +648,5 @@ export function initAlight(c){
   };
   $('amXml').onclick=()=>go('dl');
   $('amShare').onclick=()=>go('share');
-  $('amCal').onclick=()=>{c.dl('rovio_calibration.xml',buildCalibration(opts()),'application/xml');msg('Calibration project saved. Import it in Alight Motion and follow the layer names.')};
+  $('amCal').onclick=()=>{c.dl('kineextract_calibration.xml',buildCalibration(opts()),'application/xml');msg('Calibration project saved. Import it in Alight Motion and follow the layer names.')};
 }
