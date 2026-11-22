@@ -3,7 +3,7 @@ import {initAlight} from './alight.js?v=10';
 import {initBG} from './bg.js?v=2';
 const $=i=>document.getElementById(i),V=$('v'),O=$('ov'),ox=O.getContext('2d'),G=$('graph'),EC=$('ezc'),ec=EC.getContext('2d'),PV=$('pv'),pc=PV.getContext('2d'),crop=document.createElement('canvas'),cx=crop.getContext('2d');
 const WASM="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm",MURL=m=>`https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_${m}/float16/1/pose_landmarker_${m}.task`;
-let BGAPI=null,fs,delegate='GPU',LMs={},tsBase=0,frames=[],EF=[],R={},RF={},S={},K={},CORR=[],undo=[],redo=[],sel='head',prop='rot',selKf=-1,stop=false,view=[0,1],fps=15,start=0,dirty=true,endAt=null,lastT=-1,meta={},curFile=null,subj=null,picking=false,hov=null,rep={},lasso=null,lp=[],lassoing=false,drawingL=false,anchor=null,vel={x:0,y:0},BR=null,seed=null,ident=null,pickC=[],pickT=-1,lastPx=null;
+let BGAPI=null,fs,delegate='GPU',LMs={},tsBase=0,frames=[],EF=[],R={},RF={},S={},K={},CORR=[],undo=[],redo=[],sel='head',prop='rot',selKf=-1,stop=false,view=[0,1],fps=15,start=0,dirty=true,endAt=null,lastT=-1,meta={},curFile=null,subj=null,picking=false,hov=null,rep={},lasso=null,ptool=null,painting=null,bcur=null,anchor=null,vel={x:0,y:0},BR=null,seed=null,ident=null,pickC=[],pickT=-1,lastPx=null;
 const C={L:'#3de8ff',R:'#ff8a4c',N:'#c4c4cc',sel:'#ffe45e',brand:'#10ecc0',ok:'#3dffa6'};
 const KP=['rot','x','y','jt','len'],PROPS={rot:'Rotation °',x:'Position X',y:'Position Y',jt:'Joint angle °',len:'Segment length',vrot:'Angular velocity °/s (read-only)',vpos:'Position velocity /s (read-only)'};
 $('prop').innerHTML=Object.entries(PROPS).map(([k,v])=>`<option value=${k}>${v}</option>`).join('');
@@ -93,7 +93,7 @@ function fix(id,p){const k=K[id][p],y=S[id][p];let n=0;for(let g=0;g<500;g++){le
  if(!ins)break;k.splice(ins[0],0,{i:ins[1],v:y[ins[1]],why:'Added: a segment cannot turn back on itself',e:EZ.Linear});n++}return n}
 function curve(k,i){if(i<=k[0].i)return k[0].v;for(let j=0;j<k.length-1;j++){const a=k[j],b=k[j+1];if(i<=b.i)return a.v+(b.v-a.v)*ez(a.e,(i-a.i)/(b.i-a.i))}return k[k.length-1].v}
 const KS=()=>K[sel]?.[prop];
-// ---- smart tracking: multi-pass measurement, cross-check, verify sweeps, lasso focus
+// ---- smart tracking: multi-pass measurement, cross-check, verify sweeps, target-area focus
 const vis=l=>MAIN.reduce((a,k)=>a+l[k].v,0)/MAIN.length,nm=l=>l.map(p=>({x:p.x,y:p.y,v:p.visibility??1})),tag=(l,s)=>{l.src=s;return l};
 function box(l,all){let q=l.filter((p,i)=>p.v>.3&&(all||ok(i)));if(q.length<4)q=l;return{x0:Math.min(...q.map(p=>p.x)),x1:Math.max(...q.map(p=>p.x)),y0:Math.min(...q.map(p=>p.y)),y1:Math.max(...q.map(p=>p.y))}}
 const bs=b=>Math.max(30,Math.hypot((b.x1-b.x0)*VW(),(b.y1-b.y0)*VH())),dd=(a,b)=>Math.hypot((a.x-b.x)*VW(),(a.y-b.y)*VH());
@@ -178,22 +178,65 @@ function cenOf(P){let a=0,x=0,y=0;for(let i=0;i<P.length;i++){const[x0,y0]=P[i],
 const torsoC=l=>({x:(l[11].x+l[12].x+l[23].x+l[24].x)/4,y:(l[11].y+l[12].y+l[23].y+l[24].y)/4});
 // The lasso and the subject circle are FIXED in video space. They never follow the person and never move on playback or scrubbing:
 // they only change when you draw a new lasso or drag the centre handle yourself.
-function lassoNow(){return lasso||null}
-function maskPoly(ref){const L=lassoNow(ref);if(!L)return null;const f=1+(+$('fpad').value||35)/100;return L.pts.map(([x,y])=>[L.c.x+(x-L.c.x)*f,L.c.y+(y-L.c.y)*f])}
-function finishLasso(){let P=lp;lp=[];$('lasso').classList.remove('on');O.style.cursor='';lastT=-1;
- if(P.length>90)P=P.filter((_,i)=>i%Math.ceil(P.length/90)===0);
- if(P.length<6||(()=>{const b=bbOf(P);return b.x1-b.x0<.01||b.y1-b.y0<.01})())return st('Lasso too small. Drag a closed loop around the spot you want tracked.');
- lasso={pts:P,bb:bbOf(P),c:cenOf(P),t:V.currentTime};anchor=null;
- st(`Lasso set at ${V.currentTime.toFixed(2)}s. Press Analyze (works best when drawn on the first frame of the clip).`)}
-function drawLassoOv(w,h,lm){const lw=Math.max(2,w/320);
- if(lp.length>1){ox.strokeStyle=C.brand;ox.lineWidth=lw*1.5;ox.beginPath();lp.forEach(([x,y],j)=>j?ox.lineTo(x*w,y*h):ox.moveTo(x*w,y*h));ox.stroke()}
- const L=lasso&&lassoNow(lm);if(!L)return;ox.save();
- ox.fillStyle='rgba(0,0,0,.35)';ox.beginPath();ox.rect(0,0,w,h);L.pts.forEach(([x,y],j)=>j?ox.lineTo(x*w,y*h):ox.moveTo(x*w,y*h));ox.closePath();ox.fill('evenodd');
- ox.beginPath();L.pts.forEach(([x,y],j)=>j?ox.lineTo(x*w,y*h):ox.moveTo(x*w,y*h));ox.closePath();ox.setLineDash([lw*4,lw*3]);ox.strokeStyle=C.brand;ox.lineWidth=lw*1.5;ox.stroke();ox.setLineDash([]);
- const r=w/45,cx_=L.c.x*w,cy_=L.c.y*h;ox.setLineDash([]);ox.shadowColor=C.brand;ox.shadowBlur=lw*4;ox.beginPath();ox.moveTo(cx_-r,cy_);ox.lineTo(cx_+r,cy_);ox.moveTo(cx_,cy_-r);ox.lineTo(cx_,cy_+r);ox.stroke();ox.beginPath();ox.arc(cx_,cy_,w/90,0,7);ox.stroke();ox.restore()}
+function lassoNow(){return lasso&&lasso.n?lasso:null}
+// The target area is painted with the Draw / Erase tools onto a small grid in video space (d = 1 where painted).
+const GW=240;
+function newMask(){const w=VW(),h=VH(),gh=Math.max(8,Math.round(GW*h/w));return{gw:GW,gh,d:new Uint8Array(GW*gh),rev:0,t:V.currentTime||0,n:0,ox:0,oy:0,c:{x:.5,y:.5},bb:{x0:0,x1:1,y0:0,y1:1}}}
+function measureMask(L){const{gw,gh,d}=L;let n=0,sx=0,sy=0,x0=gw,x1=-1,y0=gh,y1=-1;
+ for(let y=0;y<gh;y++)for(let x=0;x<gw;x++)if(d[y*gw+x]){n++;sx+=x;sy+=y;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
+ L.n=n;if(n){L.c={x:(sx/n+.5)/gw,y:(sy/n+.5)/gh};L.bb={x0:x0/gw,x1:(x1+1)/gw,y0:y0/gh,y1:(y1+1)/gh}}return L}
+const inMask=(x,y,L)=>{const ix=Math.floor(x*L.gw),iy=Math.floor(y*L.gh);return ix>=0&&iy>=0&&ix<L.gw&&iy<L.gh&&L.d[iy*L.gw+ix]>0};
+// brush radius as a fraction of the frame width (the slider is the diameter in % of the width)
+const brushR=()=>Math.max(.004,(+$('brush').value||5)/200);
+function stamp(L,px,py,r,val){const W=VW(),H=VH(),rp=r*W,gw=L.gw,gh=L.gh,x0=Math.max(0,Math.floor((px-r)*gw)),x1=Math.min(gw-1,Math.ceil((px+r)*gw)),y0=Math.max(0,Math.floor(py*gh-rp/H*gh)),y1=Math.min(gh-1,Math.ceil(py*gh+rp/H*gh));
+ for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const dx=((x+.5)/gw-px)*W,dy=((y+.5)/gh-py)*H;if(dx*dx+dy*dy<=rp*rp)L.d[y*gw+x]=val}
+ const ix=Math.floor(px*gw),iy=Math.floor(py*gh);if(ix>=0&&iy>=0&&ix<gw&&iy<gh)L.d[iy*gw+ix]=val}
+function paintSeg(L,a,b,val){const W=VW(),H=VH(),r=brushR(),len=Math.hypot((b.x-a.x)*W,(b.y-a.y)*H),n=Math.max(1,Math.ceil(len/Math.max(1,r*W*.4)));for(let i=0;i<=n;i++){const t=i/n;stamp(L,a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t,r,val)}}
+function beginStroke(p,e){const erase=ptool==='erase';if(erase&&!lassoNow())return st('Nothing to erase yet. Press Draw and paint the spot first.');
+ if(!lasso)lasso=newMask();painting={last:p,erase};if(!erase)lasso.t=V.currentTime;O.setPointerCapture(e.pointerId);strokeTo(p,p)}
+function strokeTo(a,b){paintSeg(lasso,a,b,painting.erase?0:1);lasso.rev++;lastT=-1}
+function endStroke(){painting=null;const L=lasso;if(!L)return;measureMask(L);anchor=null;lastT=-1;
+ if(!L.n){lasso=null;return st('Target area cleared.')}
+ st(`Target area covers ${(100*L.n/(L.gw*L.gh)).toFixed(1)}% of the frame. Keep painting, or press Analyze (works best when drawn on the first frame of the clip).`)}
+// dragging the crosshair moves the whole painted area (in whole cells)
+function shiftMask(L,dx,dy){L.ox+=dx*L.gw;L.oy+=dy*L.gh;const sx=Math.trunc(L.ox),sy=Math.trunc(L.oy);if(!sx&&!sy)return;L.ox-=sx;L.oy-=sy;
+ const{gw,gh,d}=L,o=new Uint8Array(gw*gh);for(let y=0;y<gh;y++)for(let x=0;x<gw;x++){if(!d[y*gw+x])continue;const nx=x+sx,ny=y+sy;if(nx>=0&&nx<gw&&ny>=0&&ny<gh)o[ny*gw+nx]=1}
+ L.d=o;L.rev++;measureMask(L)}
+function toolOff(){ptool=null;painting=null;bcur=null;$('draw').classList.remove('on');$('erase').classList.remove('on');O.style.cursor=''}
+function setTool(t){if(!V.src)return st('Load a video first.');const turnOn=ptool!==t;toolOff();
+ if(turnOn){ptool=t;picking=false;O.style.cursor='crosshair';$('draw').classList.toggle('on',t==='draw');$('erase').classList.toggle('on',t==='erase')}
+ lastT=-1;st(!turnOn?'Draw tool off.':t==='draw'?'Draw: paint over the spot you want tracked. Press Draw again when you are done.':'Erase: rub out parts of the drawn area. Press Erase again when you are done.')}
+// sessions saved with the old lasso (a polygon) are converted to a painted area when opened
+function loadMask(x){if(!x)return null;
+ if(x.d){x.d=x.d instanceof Uint8Array?x.d:new Uint8Array(x.d);x.ox=x.ox||0;x.oy=x.oy||0;x.rev=x.rev||0;return measureMask(x).n?x:null}
+ if(x.pts){const L=newMask();for(let y=0;y<L.gh;y++)for(let X=0;X<L.gw;X++)if(inPoly((X+.5)/L.gw,(y+.5)/L.gh,x.pts))L.d[y*L.gw+X]=1;L.t=x.t||0;L.rev=1;return measureMask(L).n?L:null}
+ return null}
+// "ignore everything outside": the painted area grown by the Focus padding, everything else greyed out in the crop the tracker sees
+let fcache=null;
+function maskOut(L){const pad=+$('fpad').value||0,key=L.rev+'|'+pad;if(fcache&&fcache.L===L&&fcache.key===key)return fcache;
+ const{gw,gh,d}=L,r=Math.max(0,pad/200*Math.max((L.bb.x1-L.bb.x0)*gw,(L.bb.y1-L.bb.y0)*gh)),dist=new Float32Array(gw*gh);
+ for(let i=0;i<dist.length;i++)dist[i]=d[i]?0:1e9;
+ for(let y=0;y<gh;y++)for(let x=0;x<gw;x++){const i=y*gw+x;let v=dist[i];if(x>0)v=Math.min(v,dist[i-1]+1);if(y>0){v=Math.min(v,dist[i-gw]+1);if(x>0)v=Math.min(v,dist[i-gw-1]+1.414);if(x<gw-1)v=Math.min(v,dist[i-gw+1]+1.414)}dist[i]=v}
+ for(let y=gh-1;y>=0;y--)for(let x=gw-1;x>=0;x--){const i=y*gw+x;let v=dist[i];if(x<gw-1)v=Math.min(v,dist[i+1]+1);if(y<gh-1){v=Math.min(v,dist[i+gw]+1);if(x<gw-1)v=Math.min(v,dist[i+gw+1]+1.414);if(x>0)v=Math.min(v,dist[i+gw-1]+1.414)}dist[i]=v}
+ const cv=document.createElement('canvas');cv.width=gw*3;cv.height=gh*3;const c2=cv.getContext('2d');c2.fillStyle='#808080';c2.fillRect(0,0,cv.width,cv.height); // grey margin so areas beyond the frame edge are greyed too
+ const im=c2.createImageData(gw,gh);for(let i=0;i<dist.length;i++){const o=4*i;if(dist[i]>r){im.data[o]=im.data[o+1]=im.data[o+2]=128;im.data[o+3]=255}}
+ c2.putImageData(im,gw,gh);return fcache={L,key,cv}}
+function paintOutside(ctx,L,nx0,ny0,nx1,ny1,dw,dh,mirror){const o=maskOut(L),gw=L.gw,gh=L.gh;ctx.save();if(mirror){ctx.translate(dw,0);ctx.scale(-1,1)}
+ ctx.drawImage(o.cv,nx0*gw+gw,ny0*gh+gh,(nx1-nx0)*gw,(ny1-ny0)*gh,0,0,dw,dh);ctx.restore()}
+function focusMask(ref){return lassoNow(ref)}
+// overlay: painted cells in the accent colour with a brighter edge, everything else dimmed
+let fview=null;
+function maskView(L){if(fview&&fview.L===L&&fview.rev===L.rev)return fview.cv;const{gw,gh,d}=L,cv=fview&&fview.cv.width===gw&&fview.cv.height===gh?fview.cv:Object.assign(document.createElement('canvas'),{width:gw,height:gh}),c2=cv.getContext('2d'),im=c2.createImageData(gw,gh),p=im.data;
+ for(let y=0;y<gh;y++)for(let x=0;x<gw;x++){const i=y*gw+x,o=4*i;if(d[i]){const edge=x===0||y===0||x===gw-1||y===gh-1||!d[i-1]||!d[i+1]||!d[i-gw]||!d[i+gw];p[o]=16;p[o+1]=236;p[o+2]=192;p[o+3]=edge?235:70}else p[o+3]=90}
+ c2.putImageData(im,0,0);fview={L,rev:L.rev,cv};return cv}
+function drawFocusOv(w,h){const lw=Math.max(2,w/320),L=lassoNow();
+ if(L){ox.save();ox.imageSmoothingEnabled=true;ox.drawImage(maskView(L),0,0,w,h);
+  if(!painting){const r=w/45,x=L.c.x*w,y=L.c.y*h;ox.strokeStyle=C.brand;ox.lineWidth=lw*1.5;ox.beginPath();ox.moveTo(x-r,y);ox.lineTo(x+r,y);ox.moveTo(x,y-r);ox.lineTo(x,y+r);ox.stroke();ox.beginPath();ox.arc(x,y,w/90,0,7);ox.stroke()}
+  ox.restore()}
+ if(ptool&&bcur){ox.save();ox.lineWidth=lw*1.5;ox.strokeStyle=ptool==='erase'?'#ff6b6b':C.brand;if(ptool==='erase')ox.setLineDash([lw*3,lw*2]);ox.beginPath();ox.arc(bcur.x*w,bcur.y*h,brushR()*w,0,7);ox.stroke();ox.restore()}}
 // ---- subject choice (lasso > clicked point > largest/clearest), then continuity
 function choose(c,prev,miss){if(!c.length)return null;const L=lasso&&lassoNow(prev),LK=lockOn(),
- fo=l=>{if(!L)return 0;const q=l.filter(p=>p.v>.3);return q.length?q.filter(p=>inPoly(p.x,p.y,L.pts)).length/q.length:0},
+ fo=l=>{if(!L)return 0;const q=l.filter(p=>p.v>.3);return q.length?q.filter(p=>inMask(p.x,p.y,L)).length/q.length:0},
  ap=l=>{if(!LK||!ident)return null;if(l.sg===undefined)l.sg=sigOf(l);return simSig(l.sg,ident)};
  if(!prev){
   if(LK&&seed){let b=null,bc=1e9;const near=Math.abs(seed.t-start)<.3;for(const l of c){const q=box(l),tc=torsoC(l),d=Math.hypot((tc.x-seed.c.x)*VW(),(tc.y-seed.c.y)*VH())/bs(q),sm=ap(l),cost=d*(near?1:.25)+(sm===null?0:2.2*(1-sm))-.5*vis(l)-(L?2*fo(l):0);if(cost<bc){bc=cost;b=l}}return b}
@@ -219,7 +262,7 @@ function roiFor(ref,mul=1){const f=(+$('fpad').value||35)/100,sb=ref?box(ref,tru
 function runCrop(im,q,src,size,enh,mirror,mask){q=q||{x0:0,y0:0,x1:1,y1:1};const W=VW(),H=VH(),cw=(q.x1-q.x0)*W,ch=(q.y1-q.y0)*H,k=Math.min(size/Math.max(cw,ch),4);
  crop.width=Math.max(32,Math.round(cw*k));crop.height=Math.max(32,Math.round(ch*k));
  cx.save();cx.filter=enh?'contrast(1.4) saturate(1.3)':'none';if(mirror){cx.translate(crop.width,0);cx.scale(-1,1)}cx.drawImage(V,q.x0*W,q.y0*H,cw,ch,0,0,crop.width,crop.height);cx.restore();
- if(mask){cx.save();cx.fillStyle='#808080';cx.beginPath();cx.rect(0,0,crop.width,crop.height);mask.forEach(([x,y],j)=>{const X=(mirror?q.x1-x:x-q.x0)/(q.x1-q.x0)*crop.width,Y=(y-q.y0)/(q.y1-q.y0)*crop.height;j?cx.lineTo(X,Y):cx.moveTo(X,Y)});cx.closePath();cx.fill('evenodd');cx.restore()}
+ if(mask)paintOutside(cx,mask,q.x0,q.y0,q.x1,q.y1,crop.width,crop.height,mirror);
  return im.detect(crop).landmarks.map(l=>{const p=nm(l).map(p=>({x:q.x0+(mirror?1-p.x:p.x)*(q.x1-q.x0),y:q.y0+p.y*(q.y1-q.y0),v:p.v}));if(mirror)for(const[a,b]of SW){const t=p[a];p[a]=p[b];p[b]=t}return tag(p,src)})}
 // ---- cross-checking
 function agree(a,b){const s=bs(box(a));let t=0,n=0;for(const k of MAIN){if(a[k].v<.3||b[k].v<.3)continue;t+=dd(a[k],b[k]);n++}return n>=4?t/n/s:NaN}
@@ -260,7 +303,7 @@ const pcv=document.createElement('canvas'),pg=pcv.getContext('2d',{willReadFrequ
 async function dwPose(bx,o={}){const W=VW(),H=VH(),pad=o.pad||1.25,ccx=(bx.x0+bx.x1)/2*W,ccy=(bx.y0+bx.y1)/2*H,asp=DW.W/DW.H;
  let sw=Math.max(8,(bx.x1-bx.x0)*W*pad),sh=Math.max(8,(bx.y1-bx.y0)*H*pad);if(sw>sh*asp)sh=sw/asp;else sw=sh*asp;const sx=ccx-sw/2,sy=ccy-sh/2;
  pg.save();pg.fillStyle='#000';pg.fillRect(0,0,DW.W,DW.H);pg.filter=o.enh?'contrast(1.35) saturate(1.2)':'none';if(o.mirror){pg.translate(DW.W,0);pg.scale(-1,1)}pg.drawImage(V,sx,sy,sw,sh,0,0,DW.W,DW.H);pg.restore();
- if(o.mask){pg.save();pg.fillStyle='#808080';pg.beginPath();pg.rect(0,0,DW.W,DW.H);o.mask.forEach(([x,y],j)=>{let X=(x*W-sx)/sw*DW.W;if(o.mirror)X=DW.W-X;const Y=(y*H-sy)/sh*DW.H;j?pg.lineTo(X,Y):pg.moveTo(X,Y)});pg.closePath();pg.fill('evenodd');pg.restore()}
+ if(o.mask)paintOutside(pg,o.mask,sx/W,sy/H,(sx+sw)/W,(sy+sh)/H,DW.W,DW.H,o.mirror);
  const d=pg.getImageData(0,0,DW.W,DW.H).data,n=DW.W*DW.H,f=new Float32Array(3*n);for(let i=0;i<n;i++){f[i]=(d[4*i]-123.675)/58.395;f[n+i]=(d[4*i+1]-116.28)/57.12;f[2*n+i]=(d[4*i+2]-103.53)/57.375}
  const res=await dwP.run({[dwP.inputNames[0]]:new ort.Tensor('float32',f,[1,3,DW.H,DW.W])});let tx=null,ty=null;
  for(const nme of dwP.outputNames){const t=res[nme];if(t.dims[2]===DW.W*2)tx=t;else if(t.dims[2]===DW.H*2)ty=t}
@@ -275,7 +318,7 @@ function trackBox(l,useVel=true){const b=box(l,true),vx=useVel?vel.x:0,vy=useVel
 // one frame with the advanced engine. detector runs on the first frame, when lost, and every few frames; in between the box follows the pose (like a pose tracker)
 async function detectDW(i,prev,miss){const lvl=$('smart').checked?$('thr').value:'off',tol=tolV(),np=Math.max(2,+$('np').value||1);
  const tb=prev?trackBox(prev):null,every={off:8,fast:8,care:5,max:2}[lvl],needDet=$('ddet').value==='yolox'&&(!prev||miss>0||i%every===0||vis(prev)<.5||camFast);
- const dets=needDet?await yoloBoxes(.3,np):[],mask=lasso&&$('lmask').checked?maskPoly(prev):null;let seen=dets.length;
+ const dets=needDet?await yoloBoxes(.3,np):[],mask=lasso&&$('lmask').checked?focusMask(prev):null;let seen=dets.length;
  const props=[];if(tb)props.push({b:tb,s:'track'});for(const d of dets)if(!tb||lvl==='max'||iou(d,tb)<.6)props.push({b:d,s:'det'});
  if(!props.length)props.push({b:roiFor(prev)||{x0:0,y0:0,x1:1,y1:1},s:'ctx'});
  const A0=[];for(const p of props.slice(0,np+1)){const l=await dwPose(p.b,{mask});if(l){l.bx=p.b;A0.push(tag(l,'dw-'+p.s))}}seen+=A0.length;
@@ -307,7 +350,7 @@ async function detect(i,prev,miss){if(engine()==='dw')return detectDW(i,prev,mis
  const im=await getLM('IMAGE'),ref=prev||A;
  if(lvl==='fast'){let b=A;if(!b||vis(b)<.6){const q=roiFor(ref),ex=q?runCrop(im,q,'roi',512):[];seen+=ex.length;b=choose(all.concat(ex),prev,miss);
    if(!b){const e2=runCrop(im,null,'enh',1024,true);seen+=e2.length;b=choose(all.concat(ex,e2),prev,miss)}}return done(b,{resc:!!b&&b!==A})}
- const cs=[],mask=lasso&&$('lmask').checked?maskPoly(ref):null,q=roiFor(ref);if(A)cs.push(A);
+ const cs=[],mask=lasso&&$('lmask').checked?focusMask(ref):null,q=roiFor(ref);if(A)cs.push(A);
  const add=(list,src)=>{seen+=list.length;const b=choose(list,ref,miss);if(b)cs.push(tag(b,src))};
  add(runCrop(im,q,'roi',512,false,false,mask),'roi');
  const g=cs.length>=2?agree(cs[0],cs[1]):NaN;
@@ -331,7 +374,7 @@ function suspects(){buildBR();const th=Math.max(.08,tolV()*1.7),out=[];
 async function recheck(i,why){const f=frames[i];await seek(start+i/fps);const c0=ccOf(i);
  const nb=[i-1,i+1].filter(j=>frames[j]?.lm).map(j=>{const cj=ccOf(j);return shiftLM(frames[j].lm,c0[0]-cj[0],c0[1]-cj[1])});let ref=null;
  if(nb.length===2)ref=nb[0].map((p,k)=>({x:(p.x+nb[1][k].x)/2,y:(p.y+nb[1][k].y)/2,v:Math.min(p.v,nb[1][k].v)}));else if(nb.length===1)ref=nb[0];else if(f.lm)ref=f.lm;
- const dw=engine()==='dw',im=dw?null:await getLM('IMAGE'),cs=[],mask=lasso&&$('lmask').checked?maskPoly(ref):null,tol=tolV(),q=dw?null:roiFor(ref),qw=dw?null:roiFor(ref,1.8);
+ const dw=engine()==='dw',im=dw?null:await getLM('IMAGE'),cs=[],mask=lasso&&$('lmask').checked?focusMask(ref):null,tol=tolV(),q=dw?null:roiFor(ref),qw=dw?null:roiFor(ref,1.8);
  if(f.lm)cs.push(tag(f.lm.map(p=>({...p})),'orig'));
  if(dw)cs.push(...await dwGather(ref,mask));else{const add=(list,src)=>{const b=choose(list,ref,0);if(b)cs.push(tag(b,src))};
  add(im.detect(V).landmarks.map(l=>tag(nm(l),'full-img')),'full-img');
@@ -350,11 +393,11 @@ const seek=t=>new Promise(r=>{t=Math.min(t,V.duration);let d=false;const fin=()=
 // Pick subject / Lasso (and their Clear buttons) are greyed out while the analysis (and the background rebuild after it) runs,
 // and come back when it finishes or is cancelled.
 let analyzing=false;
-const TOOLBTN=['pick','pclear','lasso','lclear'];
+const TOOLBTN=['pick','pclear','draw','erase','brush','fclear'];
 const lockTools=on=>{for(const i of TOOLBTN){const e=$(i);if(e)e.disabled=on}};
 async function analyze(){
   if(analyzing)return;analyzing=true;lockTools(true);
-  lassoing=false;picking=false;drawingL=false;lp=[];$('lasso').classList.remove('on');O.style.cursor='';lastT=-1;
+  toolOff();picking=false;lastT=-1;
   try{await analyzeRun()}finally{analyzing=false;lockTools(false)}
 }
 async function analyzeRun(){if(!V.src)return st('Load a video first.');picking=false;O.style.cursor='';if(engine()==='mp'&&!fs)return st('MediaPipe model not ready yet.');
@@ -377,7 +420,7 @@ async function analyzeRun(){if(!V.src)return st('Load a video first.');picking=f
  catch(e){console.error(e);st('Tracking error: '+e.message)}
  camCum={x:0,y:0};camUnc=0;camFast=false;tsBase+=Math.round(n*1000/fps)+1000;$('analyze').disabled=false;$('cancel').disabled=true;if(!frames.length)return;rep.missing=frames.filter(f=>!f.lm).length;
  meta={...meta,w:V.videoWidth,h:V.videoHeight,duration:V.duration,fps,start,end};compute();view=[0,Math.max(1,frames.length-1)];
- const note=lasso&&Math.abs(lasso.t-start)>.3?` · Lasso was drawn at ${lasso.t.toFixed(2)}s, not the clip start: redraw it on the first frame for best focus.`:'';
+ const note=lasso&&Math.abs(lasso.t-start)>.3?` · The target area was last drawn at ${lasso.t.toFixed(2)}s, not the clip start: redraw it on the first frame for best focus.`:'';
  st(`${stop?'Cancelled, partial. ':'Done. '}${frames.length} frames · ${rep.checked} confirmed by 2+ agreeing passes · ${rep.rescued} rescued by retry · ${rep.swaps} L/R swaps fixed · ${rep.rechecked} re-measured in verify sweeps (${rep.fixed} corrected) · ${rep.rejected} wrong-subject jumps rejected · ${rep.held||0} repeated frames reused · ${rep.missing} untracked${camOn&&camPeak>.004?` · camera shake compensated (peak ${(camPeak*100).toFixed(1)}% of the frame in one step)`:''}${note}`);V.currentTime=start;
  if(!stop&&BGAPI&&$('bgOn')&&$('bgOn').checked&&frames.length)await BGAPI.capture()}
 async function init(){try{fs=await FilesetResolver.forVisionTasks(WASM)}catch(e){return st('Could not load MediaPipe (internet / http required).')}
@@ -428,14 +471,14 @@ function overlay(){const w=VW(),h=VH();if(O.width!==w){O.width=w;O.height=h;$('s
  if(subj){ox.save();ox.strokeStyle=C.brand;ox.shadowColor=C.brand;ox.shadowBlur=8;ox.lineWidth=3;ox.beginPath();ox.arc(subj.x*w,subj.y*h,w/40,0,7);ox.stroke();ox.beginPath();ox.arc(subj.x*w,subj.y*h,w/260,0,7);ox.fillStyle=C.brand;ox.fill();ox.restore()}
  if(seed&&lockOn()&&subj&&!picking){ox.save();ox.font='600 '+Math.round(w/60)+'px sans-serif';ox.fillStyle=C.brand;ox.textAlign='center';ox.fillText('LOCKED',subj.x*w,subj.y*h+w/40+w/50);ox.restore()}
  if(picking&&pickC.length&&Math.abs(V.currentTime-pickT)<.02)drawPick(w,h);
- const i=ci(),lm=EF[i];drawLassoOv(w,h,lm);if(i<0||!lm||!$('skel').checked)return;const lw=Math.max(2,w/300);ox.lineWidth=lw;
+ const i=ci(),lm=EF[i];drawFocusOv(w,h);if(i<0||!lm||!$('skel').checked)return;const lw=Math.max(2,w/300);ox.lineWidth=lw;
  for(const[a,b]of CONN){if(!ok(a)||!ok(b))continue;const m=Math.max(a,b);ox.strokeStyle=m<11?C.N:m%2?C.L:C.R;ox.globalAlpha=Math.min(lm[a].v,lm[b].v)<.5?.3:1;ox.beginPath();ox.moveTo(lm[a].x*w,lm[a].y*h);ox.lineTo(lm[b].x*w,lm[b].y*h);ox.stroke()}
  ox.font=Math.round(w/70)+'px sans-serif';lm.forEach((p,n)=>{if(!ok(n))return;ox.globalAlpha=Math.max(.25,p.v);ox.fillStyle=p.fixed?'#fff':n<11?C.N:n%2?C.L:C.R;ox.beginPath();ox.arc(p.x*w,p.y*h,lw*(p.fixed?2.5:1.5),0,7);ox.fill();if($('lbl').checked){ox.fillStyle='#fff';ox.fillText(NAMES[n],p.x*w+6,p.y*h)}});ox.globalAlpha=1;
  const d=D[sel],a=pt(lm,d.a),b=pt(lm,d.b);ox.strokeStyle=C.sel;ox.lineWidth=lw*2;ox.beginPath();ox.moveTo(a.x*w,a.y*h);ox.lineTo(b.x*w,b.y*h);ox.stroke();
  if($('trail').checked&&S[sel]){const tl=+$('tl').value||30,q=S[sel],s0=Math.max(0,i-tl);ox.strokeStyle=C.sel+'88';ox.lineWidth=lw;ox.beginPath();for(let j=s0;j<=i;j++)j==s0?ox.moveTo(q.x[j]*w,q.y[j]*h):ox.lineTo(q.x[j]*w,q.y[j]*h);ox.stroke()}}
 const rel=e=>{const r=O.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height}};let cdrag=null,fdrag=null;const focusHit=p=>{const w=VW(),h=VH(),near=c=>Math.hypot((p.x-c.x)*w,(p.y-c.y)*h)<w*.03;if(subj&&near(subj))return'subj';const L=lasso&&lassoNow(EF[ci()]);return L&&near(L.c)?'lasso':null};
-function moveFocus(k,dx,dy){if(k==='subj'){subj={x:Math.min(1,Math.max(0,subj.x+dx)),y:Math.min(1,Math.max(0,subj.y+dy))};if(seed)seed.c={x:seed.c.x+dx,y:seed.c.y+dy};return}lasso={...lasso,pts:lasso.pts.map(([x,y])=>[x+dx,y+dy]),c:{x:lasso.c.x+dx,y:lasso.c.y+dy}};lasso.bb=bbOf(lasso.pts)}
-O.onpointerdown=e=>{if(analyzing)return;const p=rel(e),i=ci();if(lassoing){lp=[[p.x,p.y]];drawingL=true;O.setPointerCapture(e.pointerId);lastT=-1;return}
+function moveFocus(k,dx,dy){if(k==='subj'){subj={x:Math.min(1,Math.max(0,subj.x+dx)),y:Math.min(1,Math.max(0,subj.y+dy))};if(seed)seed.c={x:seed.c.x+dx,y:seed.c.y+dy};return}shiftMask(lasso,dx,dy)}
+O.onpointerdown=e=>{if(analyzing)return;const p=rel(e),i=ci();if(ptool){beginStroke(p,e);return}
  if(picking){picking=false;const ok_=pickC.length&&Math.abs(V.currentTime-pickT)<.02;
   if(pickC.length&&!ok_){pickC=[];lastT=-1;return st('The frame changed after the people were detected. Press Pick subject again.')}
   let k=-1,bd=.7;if(ok_)pickC.forEach((l,n)=>{const d=skelDist(l,p);if(d<bd){bd=d;k=n}});
@@ -445,9 +488,9 @@ O.onpointerdown=e=>{if(analyzing)return;const p=rel(e),i=ci();if(lassoing){lp=[[
  if(!frames.length||i<0)return;
  if($('corr').checked&&EF[i]){let b=-1,bd=.05;EF[i].forEach((q,k)=>{const d=Math.hypot((q.x-p.x)*VW(),(q.y-p.y)*VH())/VW();if(d<bd){bd=d;b=k}});if(b>=0){cdrag=b;O.setPointerCapture(e.pointerId)}return}
  let b=null,bd=.06;for(const id of act()){const d=Math.hypot(S[id].x[i]-p.x,S[id].y[i]-p.y);if(d<bd){bd=d;b=id}}if(b){sel=b;selKf=-1;dirty=true}};
-O.onpointermove=e=>{if(fdrag){const p=rel(e);moveFocus(fdrag.k,p.x-fdrag.x,p.y-fdrag.y);fdrag.x=p.x;fdrag.y=p.y;lastT=-1;return}if(drawingL){const p=rel(e),l=lp[lp.length-1];if(Math.hypot((p.x-l[0])*VW(),(p.y-l[1])*VH())>4){lp.push([p.x,p.y]);lastT=-1}return}if(cdrag===null){if(!lassoing&&!picking&&!$('corr').checked)O.style.cursor=focusHit(rel(e))?'grab':'';return}const p=rel(e),q=EF[ci()][cdrag];q.x=Math.min(1,Math.max(0,p.x));q.y=Math.min(1,Math.max(0,p.y));q.fixed=true;lastT=-1};
-O.onpointerup=e=>{if(fdrag){fdrag=null;O.style.cursor='';lastT=-1;st('Focus moved. It stays there until you move or clear it. Press Analyze to track with it.');return}if(drawingL){drawingL=false;lassoing=false;finishLasso();return}if(cdrag===null)return;const i=ci(),q=EF[i][cdrag];undo.push(JSON.stringify(CORR));redo=[];CORR=CORR.filter(c=>!(c.i===i&&c.k===cdrag));CORR.push({i,k:cdrag,x:q.x,y:q.y,r:+$('rad').value||0});cdrag=null;compute();lastT=-1};
-O.onpointercancel=()=>{fdrag=null};
+O.onpointermove=e=>{if(fdrag){const p=rel(e);moveFocus(fdrag.k,p.x-fdrag.x,p.y-fdrag.y);fdrag.x=p.x;fdrag.y=p.y;lastT=-1;return}if(ptool){const p=rel(e);bcur=p;if(painting){strokeTo(painting.last,p);painting.last=p}lastT=-1;return}if(cdrag===null){if(!ptool&&!picking&&!$('corr').checked)O.style.cursor=focusHit(rel(e))?'grab':'';return}const p=rel(e),q=EF[ci()][cdrag];q.x=Math.min(1,Math.max(0,p.x));q.y=Math.min(1,Math.max(0,p.y));q.fixed=true;lastT=-1};
+O.onpointerup=e=>{if(fdrag){fdrag=null;O.style.cursor='';lastT=-1;st('Focus moved. It stays there until you move or clear it. Press Analyze to track with it.');return}if(painting){endStroke();return}if(cdrag===null)return;const i=ci(),q=EF[i][cdrag];undo.push(JSON.stringify(CORR));redo=[];CORR=CORR.filter(c=>!(c.i===i&&c.k===cdrag));CORR.push({i,k:cdrag,x:q.x,y:q.y,r:+$('rad').value||0});cdrag=null;compute();lastT=-1};
+O.onpointercancel=()=>{fdrag=null;if(painting)endStroke()};O.onpointerleave=()=>{if(bcur&&!painting){bcur=null;lastT=-1}};
 $('undo').onclick=()=>{if(undo.length){redo.push(JSON.stringify(CORR));CORR=JSON.parse(undo.pop());compute();lastT=-1}};$('redo').onclick=()=>{if(redo.length){undo.push(JSON.stringify(CORR));CORR=JSON.parse(redo.pop());compute();lastT=-1}};
 // detect every person on the current frame (numbered on the video so the right one can be clicked, even when they overlap)
 async function peopleNow(){const out=[];
@@ -457,10 +500,10 @@ async function peopleNow(){const out=[];
  return keep.sort((a,b)=>torsoC(a).x-torsoC(b).x)}
 function lockPerson(l,n){const s=sigOf(l),t=torsoC(l);seed={lm:l.map(q=>({...q})),t:V.currentTime,sig:s,c:{x:t.x,y:t.y}};ident=copySig(s);subj={x:t.x,y:t.y};
  st(`Locked on person ${n}${s?' (clothing colours captured)':''}. Tracking will keep this person even when others come close. `+(Math.abs(V.currentTime-start)>.3?'Tip: this is not the clip start, tracking will find them by clothing and size.':'Press Analyze.'))}
-$('pick').onclick=async()=>{if(!V.src)return st('Load a video first.');picking=true;lassoing=false;$('lasso').classList.remove('on');subj=null;seed=null;ident=null;pickC=[];lastT=-1;const t=V.currentTime;
+$('pick').onclick=async()=>{if(!V.src)return st('Load a video first.');picking=true;toolOff();subj=null;seed=null;ident=null;pickC=[];lastT=-1;const t=V.currentTime;
  st('Finding the people on this frame…');try{const c=await peopleNow();if(!picking||Math.abs(V.currentTime-t)>.02)return;pickC=c;pickT=t}catch(e){console.warn(e);pickC=[]}
  lastT=-1;st(pickC.length>1?`Found ${pickC.length} people, numbered on the video. Click the one you want to lock onto.`:pickC.length===1?'Found 1 person. Click them to lock on.':'No skeletons found on this frame. Click the person anyway, or move to a clearer frame.')};
-$('pclear').onclick=()=>{subj=null;seed=null;ident=null;pickC=[];picking=false;O.style.cursor='';lastT=-1;st('Subject lock cleared. The largest, clearest person (or the lasso) will be used.')};
+$('pclear').onclick=()=>{subj=null;seed=null;ident=null;pickC=[];picking=false;O.style.cursor='';lastT=-1;st('Subject lock cleared. The largest, clearest person (or the drawn target area) will be used.')};
 // ---- graph (also used offscreen for PNG / reference sheet)
 const PL=48,PB=18;
 function drawGraph(cv,pr,vw,live,id=sel,mini=false){const w=cv.width,h=cv.height,g=cv.getContext('2d');g.fillStyle='#0a0a0b';g.fillRect(0,0,w,h);const s=S[id]?.[pr];if(!s||!s.length)return null;
@@ -513,7 +556,7 @@ $('sheet').onclick=sheet;
 const tx=(m,f)=>new Promise((res,rej)=>{const q=indexedDB.open('motiontrace',1)/* DB name kept so sessions saved before the rename still open */;q.onupgradeneeded=()=>q.result.createObjectStore('s',{keyPath:'name'});q.onerror=()=>rej(q.error);q.onsuccess=()=>{const t=q.result.transaction('s',m),r=f(t.objectStore('s'));t.oncomplete=()=>res(r.result);t.onerror=t.onabort=()=>rej(t.error)}});
 const listS=async()=>{try{const k=await tx('readonly',s=>s.getAllKeys());$('sess').innerHTML=k.map(n=>`<option>${n}</option>`).join('')}catch{}};
 // the part of a project that counts as "edits": the analysis, corrections, keyframes, removed parts, lasso, anchor and subject
-const sig=()=>JSON.stringify([frames.length,CORR,K,[...OFF],lasso,anchor,subj]);
+const sig=()=>JSON.stringify([frames.length,CORR,K,[...OFF],lasso&&[lasso.rev,lasso.n],anchor,subj]);
 let savedSig=null;const mark=()=>{savedSig=sig()};
 const hasEdits=()=>!analyzing&&frames.length>0&&sig()!==savedSig;
 async function saveSession(name,auto){
@@ -526,11 +569,11 @@ const nextUnnamed=async()=>{let k=[];try{k=await tx('readonly',s=>s.getAllKeys()
 // used by kineextract.js when you leave a project that has unsaved edits. Passing the name of an earlier autosave of the same project updates it.
 let asq=Promise.resolve();
 window.kineextractProject={hasEdits,autosave:existing=>asq=asq.then(async()=>{if(!hasEdits())return null;const name=existing||await nextUnnamed();return(await saveSession(name,true))?name:null})};
-$('open').onclick=async()=>{const n=$('sess').value;if(!n)return;const o=await tx('readonly',s=>s.get(n));if(!o)return;ss(o.set);OFF.clear();(o.off||[]).forEach(id=>OFF.add(id));applyOff();BGAPI&&BGAPI.set(o.bg||null);subj=o.subj||null;seed=o.seed||null;ident=null;meta=o.meta;fps=o.fps;start=o.start;frames=(o.frames||[]).map(({cm,cb,...f})=>f);CORR=o.CORR||[];lasso=o.lasso||null;anchor=o.anchor||null;undo=[];redo=[];sel=o.sel;prop=o.prop;$('prop').value=prop;view=[0,Math.max(1,frames.length-1)];
+$('open').onclick=async()=>{const n=$('sess').value;if(!n)return;const o=await tx('readonly',s=>s.get(n));if(!o)return;ss(o.set);OFF.clear();(o.off||[]).forEach(id=>OFF.add(id));applyOff();BGAPI&&BGAPI.set(o.bg||null);subj=o.subj||null;seed=o.seed||null;ident=null;meta=o.meta;fps=o.fps;start=o.start;frames=(o.frames||[]).map(({cm,cb,...f})=>f);CORR=o.CORR||[];lasso=loadMask(o.lasso);anchor=o.anchor||null;undo=[];redo=[];sel=o.sel;prop=o.prop;$('prop').value=prop;view=[0,Math.max(1,frames.length-1)];
  const fin=()=>{compute();K=o.K;selKf=-1;dirty=true;V.currentTime=start;mark();st('Session opened.')};
  if(o.video){curFile=o.video;V.src=URL.createObjectURL(o.video);V.onloadedmetadata=()=>{$('scrub').max=V.duration;fin()}}else{fin();st('Opened without video — reselect the original video file to see playback.')}};
 $('del').onclick=async()=>{const n=$('sess').value;if(n&&confirm('Delete '+n+'?')){await tx('readwrite',s=>s.delete(n));listS()}};
-const clear=()=>{BGAPI&&BGAPI.clear();frames=[];EF=[];S={};R={};RF={};K={};CORR=[];undo=[];redo=[];selKf=-1;subj=null;seed=null;ident=null;pickC=[];lasso=null;anchor=null;lp=[];dirty=true;lastT=-1};
+const clear=()=>{BGAPI&&BGAPI.clear();frames=[];EF=[];S={};R={};RF={};K={};CORR=[];undo=[];redo=[];selKf=-1;subj=null;seed=null;ident=null;pickC=[];lasso=null;anchor=null;toolOff();dirty=true;lastT=-1};
 $('reset').onclick=()=>{const l=lasso,sj=subj,sd=seed;clear();lasso=l;subj=sj;seed=sd;st('Analysis reset.')};$('newS').onclick=()=>{clear();V.removeAttribute('src');V.load();curFile=null;meta={};st('New session.')};
 // ---- wiring
 $('file').onchange=e=>{const f=e.target.files[0];if(!f)return;curFile=f;V.src=URL.createObjectURL(f);V.onloadedmetadata=()=>{const keep=frames.length&&f.name===meta.name;if(!keep){clear();$('t0').value=0;$('t1').value=V.duration.toFixed(2)}meta={...meta,name:f.name,w:V.videoWidth,h:V.videoHeight,duration:V.duration};$('scrub').max=V.duration;st(`${f.name} · ${V.videoWidth}×${V.videoHeight} · ${V.duration.toFixed(1)}s · ${(f.size/1e6).toFixed(1)}MB`);if(keep)compute()}};
@@ -555,10 +598,10 @@ $('fixK').onclick=()=>{if(KS()){const n=fix(sel,prop);$('gmsg').textContent=n?`A
  if(V.currentTime!==lastT||lastT===-1){lastT=V.currentTime;overlay();info();const w=G.clientWidth,h=G.clientHeight;if(G.width!==w||G.height!==h){G.width=w;G.height=h}G._m=drawGraph(G,prop,view,true);preview();agDraw();if(!dirty)ezEd();
   $('scrub').value=V.currentTime;$('tinfo').textContent=`${V.currentTime.toFixed(2)}s · f${Math.max(0,ci())}`;$('play').textContent=V.paused?'Play':'Pause'}})();
 
-// ---- lasso buttons
+// ---- draw / erase buttons
 $('eng').onchange=()=>st(engine()==='dw'?'Advanced tracker selected. Its models (about 350 MB) download once when you press Analyze, then stay cached.':'MediaPipe engine selected.');
-$('lasso').onclick=()=>{if(!V.src)return st('Load a video first.');lassoing=!lassoing;picking=false;lp=[];$('lasso').classList.toggle('on',lassoing);O.style.cursor=lassoing?'crosshair':'';lastT=-1;st(lassoing?'Drag a loop around the spot to focus on, then release.':'Lasso cancelled.')};
-$('lclear').onclick=()=>{lasso=null;anchor=null;lp=[];lassoing=false;$('lasso').classList.remove('on');O.style.cursor='';lastT=-1;st('Lasso cleared.')};
+$('draw').onclick=()=>setTool('draw');$('erase').onclick=()=>setTool('erase');$('brush').oninput=()=>{lastT=-1};
+$('fclear').onclick=()=>{lasso=null;anchor=null;toolOff();lastT=-1;st('Target area cleared.')};
 // ---- all-parts graph wall (every part for one property)
 let agKey='';
 $('agp').innerHTML=$('prop').innerHTML;
