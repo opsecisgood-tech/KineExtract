@@ -519,13 +519,13 @@ function drawGraph(cv,pr,vw,live,id=sel,mini=false){const w=cv.width,h=cv.height
   if(!mini&&hov!==null&&hov>=0&&hov<s.length){g.strokeStyle='#ffffff66';g.beginPath();g.moveTo(X(hov),0);g.lineTo(X(hov),h-PB);g.stroke();g.fillStyle='#fff';g.fillText(`f${hov} ${(hov/fps).toFixed(2)}s  smooth ${f3(dv(pr,s[hov]*u))}${raw?'  raw '+f3(dv(pr,raw[hov]*u)):''}`,PL+4,h-PB-6)}}
  return{X,Y,u,mn,mx,w,h}}
 const gi=e=>view[0]+(e.offsetX-PL)/(G.width-PL-8)*(view[1]-view[0]);let drag=null;
-G.onmousedown=e=>{const m=G._m;if(!m)return;const k=KS();let hit=-1;if(k)k.forEach((q,j)=>{if(Math.hypot(m.X(q.i)-e.offsetX,m.Y(q.v*m.u)-e.offsetY)<9)hit=j});
+G.onpointerdown=e=>{const m=G._m;if(!m)return;try{G.setPointerCapture(e.pointerId)}catch{}const k=KS();let hit=-1;if(k)k.forEach((q,j)=>{if(Math.hypot(m.X(q.i)-e.offsetX,m.Y(q.v*m.u)-e.offsetY)<9)hit=j});
  if(hit>=0){selKf=hit;drag={kf:hit};dirty=true}else drag={pan:view[0],x:e.offsetX,moved:false,i:gi(e)}};
-G.onmousemove=e=>{const m=G._m;if(!m)return;if(!drag){hov=Math.round(gi(e));lastT=-1;return}const k=KS();
+G.onpointermove=e=>{const m=G._m;if(!m)return;if(!drag){hov=Math.round(gi(e));lastT=-1;return}const k=KS();
  if(drag.kf!==undefined&&k){const q=k[drag.kf],lo=drag.kf?k[drag.kf-1].i+1:0,hi=drag.kf<k.length-1?k[drag.kf+1].i-1:S[sel][prop].length-1;
   if(drag.kf===0)q.i=0;else if(drag.kf===k.length-1)q.i=S[sel][prop].length-1;else q.i=Math.max(lo,Math.min(hi,Math.round(gi(e))));q.v=(m.mn+(m.h-PB-e.offsetY)/(m.h-PB-8)*(m.mx-m.mn))/m.u;q.why='Manually edited';dirty=true;lastT=-1}
  else if(drag.pan!==undefined){const dx=(e.offsetX-drag.x)/(m.w-PL-8)*(view[1]-view[0]);if(Math.abs(e.offsetX-drag.x)>3)drag.moved=true;const sp=view[1]-view[0],n=S[sel][prop].length-1,a=Math.max(0,Math.min(n-sp,drag.pan-dx));view=[a,a+sp];lastT=-1}};
-G.onmouseup=()=>{if(drag&&drag.pan!==undefined&&!drag.moved)V.currentTime=start+Math.max(0,Math.min(frames.length-1,Math.round(drag.i)))/fps;if(drag?.kf!==undefined)V.currentTime=start+KS()[drag.kf].i/fps;drag=null};G.onmouseleave=()=>{drag=null;hov=null;lastT=-1};
+G.onpointerup=G.onpointercancel=()=>{if(drag&&drag.pan!==undefined&&!drag.moved)V.currentTime=start+Math.max(0,Math.min(frames.length-1,Math.round(drag.i)))/fps;if(drag?.kf!==undefined)V.currentTime=start+KS()[drag.kf].i/fps;drag=null};G.onpointerleave=e=>{if(e.pointerType==="mouse"&&!drag){hov=null;lastT=-1}};G.onlostpointercapture=()=>{drag=null};
 const zoom=(f,c)=>{if(!frames.length)return;const n=frames.length-1;c??=(view[0]+view[1])/2;let a=c-(c-view[0])*f,b=c+(view[1]-c)*f;if(b-a>n){a=0;b=n}if(b-a<4)return;view=[Math.max(0,a),Math.min(n,b)];lastT=-1};
 G.onwheel=e=>{e.preventDefault();zoom(e.deltaY>0?1.25:.8,gi(e))};$('zin').onclick=()=>zoom(.7);$('zout').onclick=()=>zoom(1.4);$('zoomR').onclick=G.ondblclick=()=>{view=[0,Math.max(1,frames.length-1)];lastT=-1};
 // ---- rig preview (reconstructed from data or from eased keyframes)
