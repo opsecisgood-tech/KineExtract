@@ -199,3 +199,77 @@ input[type=checkbox],input[type=range],progress{accent-color:var(--mag)}
 .vtools label.brush{display:flex;align-items:center;gap:6px;width:auto;flex:0 0 auto;margin:0;color:var(--mu)}
 .vtools input[type=range]{width:90px;margin:0}
 .vtools button:disabled,.vtools input:disabled{opacity:.35}
+
+
+/* =====================================================================
+   Fixes: dropdowns, touch, small screens
+   ===================================================================== */
+:root{color-scheme:dark}
+/* Select boxes: the closed box used a see-through background, so the native popup list opened white with
+   light text (blank until hovered). Give the box and every option a solid dark background. */
+select{background-color:#161b23;color:var(--tx);color-scheme:dark;max-width:100%;text-overflow:ellipsis}
+select option,select optgroup{background-color:#161b23;color:#e9eef2}
+select option:checked{background-color:#0a9f86;color:#031316}
+select:disabled{opacity:.5}
+
+/* touch: let the graph, sliders and canvases take drags instead of scrolling the page */
+#graph{touch-action:none}
+input[type=range]{touch-action:pan-y;min-height:22px}
+.view.pg{-webkit-overflow-scrolling:touch}
+button,.btn,summary,.nv{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+video{max-width:100%}
+
+/* long labels must wrap instead of pushing the sidebar wide */
+aside label,#amRl label,small{overflow-wrap:anywhere}
+#status{overflow-wrap:anywhere}
+
+@media(max-width:1100px){
+ .topbar .search{flex:1 1 auto}
+ .sc b{font-size:30px}
+}
+@media(max-width:900px){
+ /* the whole editor scrolls as one page; panels keep their natural height (they were being squashed) */
+ #v-tools{overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:env(safe-area-inset-bottom)}
+ #v-tools header,#v-tools footer{flex:none}
+ #v-tools main{flex:none;min-height:auto;overflow:visible}
+ #v-tools main>aside,#v-tools main>section{flex:none;width:100%!important;max-width:none;min-width:0;overflow:visible;border:0}
+ #v-tools main>aside{border-bottom:1px solid var(--line)}
+ #tabs{top:0;position:sticky}
+ #stage,#pvw{max-height:none}
+ #wrapv{flex-direction:column}
+ #gw{height:220px}
+ .stat{flex-wrap:wrap}.stat small.r{margin-left:0;flex:1 1 100%}
+ progress{width:100%;max-width:240px}
+ .grp{width:100%}
+ .vtools{flex-wrap:wrap}.vtools input[type=range]{width:70px}
+ .pj-grid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+ #amRb{flex-direction:column;overflow:auto}
+ #amRl{width:auto;max-width:none;overflow:visible}
+ #agg{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
+ .box select{min-width:0;width:100%}
+ .pgfoot{margin-top:24px}
+ .hero{min-height:130px}
+}
+@media(max-width:700px){
+ /* 16px stops iOS Safari zooming the page when a field is focused */
+ select,input[type=number],input[type=text],input[type=url],input[type=password]{font-size:16px}
+ button,.btn,select{min-height:36px}
+ .view{padding:14px 12px}
+ h1.pt{font-size:24px}
+ .hero{padding:0 18px}.hero-t h2{font-size:34px}.hero-t p{font-size:14px}
+ .sc{padding:18px 18px 18px 26px;gap:16px;min-height:96px}.sc>svg.ic{width:40px;height:40px}.sc span{font-size:15px}.sc b{font-size:24px}
+ .pn{padding:18px}.pn h3{font-size:20px}.pn>p{font-size:15px}
+ .bigbtn{height:54px;padding:0 24px;font-size:17px;width:100%;justify-content:center}
+ .bar .bigbtn{width:auto}
+ .search{height:38px}
+ #amRl,#amRp{padding:8px}
+}
+@media(max-width:560px){
+ .topbar{gap:8px}
+ .side{padding:6px 8px}
+ .brand small{display:none}
+}
+@media(max-height:520px) and (min-width:901px){
+ #stage,#pvw{max-height:40vh}
+ #gw{height:140px}
+}
