@@ -4,7 +4,7 @@ import {initBG} from './bg.js?v=2';
 const $=i=>document.getElementById(i),V=$('v'),O=$('ov'),ox=O.getContext('2d'),G=$('graph'),EC=$('ezc'),ec=EC.getContext('2d'),PV=$('pv'),pc=PV.getContext('2d'),crop=document.createElement('canvas'),cx=crop.getContext('2d');
 const WASM="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm",MURL=m=>`https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_${m}/float16/1/pose_landmarker_${m}.task`;
 let BGAPI=null,fs,delegate='GPU',LMs={},tsBase=0,frames=[],EF=[],R={},RF={},S={},K={},CORR=[],undo=[],redo=[],sel='head',prop='rot',selKf=-1,stop=false,view=[0,1],fps=15,start=0,dirty=true,endAt=null,lastT=-1,meta={},curFile=null,subj=null,picking=false,hov=null,rep={},lasso=null,lp=[],lassoing=false,drawingL=false,anchor=null,vel={x:0,y:0},BR=null,seed=null,ident=null,pickC=[],pickT=-1,lastPx=null;
-const C={L:'#3de8ff',R:'#ff8a4c',N:'#c4c4cc',sel:'#ffe45e',brand:'#ff1226',ok:'#3dffa6'};
+const C={L:'#3de8ff',R:'#ff8a4c',N:'#c4c4cc',sel:'#ffe45e',brand:'#10ecc0',ok:'#3dffa6'};
 const KP=['rot','x','y','jt','len'],PROPS={rot:'Rotation °',x:'Position X',y:'Position Y',jt:'Joint angle °',len:'Segment length',vrot:'Angular velocity °/s (read-only)',vpos:'Position velocity /s (read-only)'};
 $('prop').innerHTML=Object.entries(PROPS).map(([k,v])=>`<option value=${k}>${v}</option>`).join('');
 const NAMES='nose,eyeIL,eyeL,eyeOL,eyeIR,eyeR,eyeOR,earL,earR,mouthL,mouthR,shL,shR,elL,elR,wrL,wrR,pkL,pkR,ixL,ixR,thL,thR,hipL,hipR,knL,knR,anL,anR,heL,heR,toL,toR'.split(',');
@@ -420,7 +420,7 @@ for(const n of[1,2,3,4])$('e'+n).onchange=()=>{const a=KS()?.[selKf];if(!a||!Arr
 $('ffit').onclick=()=>{if(selKf>=0){freeFit(sel,prop,selKf);dirty=true;lastT=-1}};
 $('ffitA').onclick=()=>{const k=KS();if(!k)return;st('Free-fitting…');for(let j=0;j<k.length-1;j++)freeFit(sel,prop,j);st('Free-fit done for '+PROPS[prop]);dirty=true;lastT=-1};
 // ---- overlay + corrections
-const PCOL=['#ffe45e','#3dffa6','#ff8a4c','#3de8ff','#ff1226','#b48cff'];
+const PCOL=['#ffe45e','#3dffa6','#ff8a4c','#3de8ff','#10ecc0','#b48cff'];
 function drawPick(w,h){const lw=Math.max(2,w/260);ox.save();ox.lineWidth=lw*1.4;ox.textAlign='center';ox.textBaseline='middle';ox.font='700 '+Math.round(w/45)+'px sans-serif';
  pickC.forEach((l,n)=>{const col=PCOL[n%PCOL.length];ox.strokeStyle=col;ox.globalAlpha=.9;ox.beginPath();for(const[a,b]of CONN){if(l[a].v<.3||l[b].v<.3)continue;ox.moveTo(l[a].x*w,l[a].y*h);ox.lineTo(l[b].x*w,l[b].y*h)}ox.stroke();
   const t=torsoC(l);ox.globalAlpha=1;ox.fillStyle=col;ox.beginPath();ox.arc(t.x*w,t.y*h,w/46,0,7);ox.fill();ox.fillStyle='#000';ox.fillText(String(n+1),t.x*w,t.y*h+1)});ox.restore()}
@@ -496,10 +496,10 @@ $('pvon').onchange=()=>{$('pvw').hidden=!$('pvon').checked;lastT=-1};for(const i
 const dl=(n,t,m)=>{const a=document.createElement('a');a.href=URL.createObjectURL(t instanceof Blob?t:new Blob([t],{type:m}));a.download=n;a.click()};
 const kcsv=ids=>'part,property,frame,time_s,value,easing,reason\n'+ids.flatMap(id=>KP.flatMap(p=>(K[id]?.[p]||[]).map(q=>[D[id].n,p,q.i,(q.i/fps).toFixed(4),q.v*U(p),easeName(q.e),q.why].join(',')))).join('\n');
 const fcsv=ids=>'part,frame,time_s,rotation,x,y,joint_angle,length,ang_vel,pos_vel,confidence\n'+ids.flatMap(id=>S[id].rot.map((_,i)=>[D[id].n,i,(i/fps).toFixed(4),...['rot','x','y','jt','len','vrot','vpos','c'].map(p=>S[id][p][i]*U(p))].join(','))).join('\n');
-$('csv').onclick=()=>{if(!frames.length)return st('Analyze first.');const sc=$('xs').value,ids=sc.startsWith('sel')?[sel]:act();dl('rovio.csv',sc.endsWith('all')?fcsv(ids):kcsv(ids),'text/csv')};
+$('csv').onclick=()=>{if(!frames.length)return st('Analyze first.');const sc=$('xs').value,ids=sc.startsWith('sel')?[sel]:act();dl('kineextract.csv',sc.endsWith('all')?fcsv(ids):kcsv(ids),'text/csv')};
 const SET=['rig','mdl','smart','np','cd','cp','ct','mv','fps','sm','sP','sR','sJ','lf','preset','kR','kP','kMin','kMax','coord','off','wrap','t0','t1','xs','thr','dtol','lmask','fpad','eng','ddet','held','lock','cam','stab','stabT','bgOn','bgMode','bgEvery','bgDetail'];
 const gs=()=>Object.fromEntries(SET.map(i=>[i,$(i).type==='checkbox'?$(i).checked:$(i).value])),ss=o=>{for(const i in o){if(!$(i))continue;if($(i).type==='checkbox')$(i).checked=o[i];else $(i).value=o[i]}};
-$('json').onclick=()=>frames.length?dl('rovio_analysis.json',JSON.stringify({meta,settings:gs(),removedParts:[...OFF],landmarksRaw:frames,corrections:CORR,landmarksCorrected:EF,segments:D,rawSeries:RF,smoothedSeries:S,keyframes:K}),'application/json'):st('Analyze first.');
+$('json').onclick=()=>frames.length?dl('kineextract_analysis.json',JSON.stringify({meta,settings:gs(),removedParts:[...OFF],landmarksRaw:frames,corrections:CORR,landmarksCorrected:EF,segments:D,rawSeries:RF,smoothedSeries:S,keyframes:K}),'application/json'):st('Analyze first.');
 $('gpng').onclick=()=>{if(!S[sel])return st('Analyze first.');const c=document.createElement('canvas');c.width=1400;c.height=420;drawGraph(c,prop,[0,frames.length-1]);c.toBlob(b=>dl(`graph_${sel}_${prop}.png`,b))};
 $('copyT').onclick=()=>{const k=KS();if(k)navigator.clipboard.writeText('frame,time,value,easing\n'+k.map(q=>[q.i,(q.i/fps).toFixed(3),q.v*U(prop),easeName(q.e)].join(',')).join('\n'))};
 async function sheet(){if(!S[sel])return st('Analyze first.');st('Building reference sheet…');const n=frames.length,c=document.createElement('canvas');c.width=900;c.height=260;
@@ -507,7 +507,7 @@ async function sheet(){if(!S[sel])return st('Analyze first.');st('Building refer
  const gh=KP.filter(p=>K[sel]?.[p]).map(p=>{drawGraph(c,p,[0,n-1]);return`<h3>${PROPS[p]}</h3><img src="${c.toDataURL('image/png')}" width=900>${tbl(p)}`}).join('');
  const k=K[sel].rot,pick=k.length>16?k.filter((_,j)=>j%Math.ceil(k.length/16)===0):k,tc=document.createElement('canvas'),tw=200,th=Math.round(tw*VH()/VW());tc.width=tw;tc.height=th;const t0=V.currentTime;let ft='';
  if(V.videoWidth)for(const q of pick){await seek(start+q.i/fps);tc.getContext('2d').drawImage(V,0,0,tw,th);ft+=`<figure><img src="${tc.toDataURL('image/jpeg',.7)}"><figcaption>f${q.i} · ${(q.i/fps).toFixed(2)}s · ${f3(dv('rot',q.v))}°</figcaption></figure>`}await seek(t0);
- dl(`reference_${sel}.html`,`<!doctype html><meta charset=utf-8><title>Rovio ${D[sel].n}</title><style>body{font:13px sans-serif;margin:20px}table{border-collapse:collapse;margin:6px 0}td,th{border:1px solid #bbb;padding:3px 8px}figure{display:inline-block;margin:4px}</style><h1>Rovio — ${D[sel].n}</h1><p>${meta.name||''} · ${fps} fps · rotation offset ${$('off').value}° · units: ${$('coord').value}</p><h2>Frames at rotation keyframes</h2>${ft}${gh}`,'text/html');st('Reference sheet saved (open it and print / save as PDF).')}
+ dl(`reference_${sel}.html`,`<!doctype html><meta charset=utf-8><title>KineExtract ${D[sel].n}</title><style>body{font:13px sans-serif;margin:20px}table{border-collapse:collapse;margin:6px 0}td,th{border:1px solid #bbb;padding:3px 8px}figure{display:inline-block;margin:4px}</style><h1>KineExtract — ${D[sel].n}</h1><p>${meta.name||''} · ${fps} fps · rotation offset ${$('off').value}° · units: ${$('coord').value}</p><h2>Frames at rotation keyframes</h2>${ft}${gh}`,'text/html');st('Reference sheet saved (open it and print / save as PDF).')}
 $('sheet').onclick=sheet;
 // ---- sessions (IndexedDB)
 const tx=(m,f)=>new Promise((res,rej)=>{const q=indexedDB.open('motiontrace',1)/* DB name kept so sessions saved before the rename still open */;q.onupgradeneeded=()=>q.result.createObjectStore('s',{keyPath:'name'});q.onerror=()=>rej(q.error);q.onsuccess=()=>{const t=q.result.transaction('s',m),r=f(t.objectStore('s'));t.oncomplete=()=>res(r.result);t.onerror=t.onabort=()=>rej(t.error)}});
@@ -523,9 +523,9 @@ async function saveSession(name,auto){
   await listS();return true}
 $('save').onclick=async()=>{if(!frames.length)return st('Analyze first.');const name=prompt('Session name',meta.name||'session');if(!name)return;await saveSession(name,false)};
 const nextUnnamed=async()=>{let k=[];try{k=await tx('readonly',s=>s.getAllKeys())}catch{}let m=0;for(const n of k){const r=/^Unnamed project (\d+)$/.exec(n);if(r)m=Math.max(m,+r[1])}return 'Unnamed project '+(m+1)};
-// used by rovio.js when you leave a project that has unsaved edits. Passing the name of an earlier autosave of the same project updates it.
+// used by kineextract.js when you leave a project that has unsaved edits. Passing the name of an earlier autosave of the same project updates it.
 let asq=Promise.resolve();
-window.rovioProject={hasEdits,autosave:existing=>asq=asq.then(async()=>{if(!hasEdits())return null;const name=existing||await nextUnnamed();return(await saveSession(name,true))?name:null})};
+window.kineextractProject={hasEdits,autosave:existing=>asq=asq.then(async()=>{if(!hasEdits())return null;const name=existing||await nextUnnamed();return(await saveSession(name,true))?name:null})};
 $('open').onclick=async()=>{const n=$('sess').value;if(!n)return;const o=await tx('readonly',s=>s.get(n));if(!o)return;ss(o.set);OFF.clear();(o.off||[]).forEach(id=>OFF.add(id));applyOff();BGAPI&&BGAPI.set(o.bg||null);subj=o.subj||null;seed=o.seed||null;ident=null;meta=o.meta;fps=o.fps;start=o.start;frames=(o.frames||[]).map(({cm,cb,...f})=>f);CORR=o.CORR||[];lasso=o.lasso||null;anchor=o.anchor||null;undo=[];redo=[];sel=o.sel;prop=o.prop;$('prop').value=prop;view=[0,Math.max(1,frames.length-1)];
  const fin=()=>{compute();K=o.K;selKf=-1;dirty=true;V.currentTime=start;mark();st('Session opened.')};
  if(o.video){curFile=o.video;V.src=URL.createObjectURL(o.video);V.onloadedmetadata=()=>{$('scrub').max=V.duration;fin()}}else{fin();st('Opened without video — reselect the original video file to see playback.')}};
@@ -571,7 +571,7 @@ $('agg').onclick=e=>{const c=e.target.closest('.agc');if(!c)return;sel=c.dataset
 $('agg').ondblclick=()=>$('ag').hidden=true;
 $('agpng').onclick=()=>{const n=frames.length;if(!S.head||n<2)return st('Analyze first.');const ids=act(),pr=$('agp').value,cols=3,cw=620,ch=230,th=20,rows=Math.ceil(ids.length/cols),c=document.createElement('canvas');c.width=cols*cw;c.height=rows*(ch+th);const g=c.getContext('2d');g.fillStyle='#0a0a0b';g.fillRect(0,0,c.width,c.height);
  ids.forEach((id,j)=>{const t=document.createElement('canvas');t.width=cw;t.height=ch;drawGraph(t,pr,[0,n-1],false,id,true);const x=j%cols*cw,y=Math.floor(j/cols)*(ch+th);g.drawImage(t,x,y+th);g.fillStyle='#d6d9de';g.font='13px sans-serif';g.fillText(`${D[id].n} · ${PROPS[pr]}`,x+8,y+14)});
- c.toBlob(b=>dl(`rovio_all_parts_${pr}.png`,b))};
+ c.toBlob(b=>dl(`kineextract_all_parts_${pr}.png`,b))};
 listS();init();
 
 // ---- sidebar tabs
@@ -580,4 +580,4 @@ $('tabs').onclick=e=>{const t=e.target.dataset?.tab;if(t)showTab(t)};
 try{showTab(localStorage.getItem('vid2anim.tab')||'scan')}catch{showTab('scan')}
 // ---- Alight Motion export (alight.js): XML project and calibration file
 BGAPI=initBG({$,st,V,seek,frames:()=>frames,fps:()=>fps,start:()=>start,W:VW,H:VH,shifts:camShifts,isStop:()=>stop,resetStop:()=>{stop=false},redraw:()=>{lastT=-1}});
-initAlight({$,st,dl,curve,act,bg:()=>BGAPI?BGAPI.get():null,paintBg:(g,w,h,i,q)=>BGAPI?BGAPI.paint(g,w,h,i,q):false,bgOn:()=>!!$('bgOn')&&$('bgOn').checked,K:()=>K,S:()=>S,D:()=>D,fps:()=>fps,n:()=>frames.length,W:VW,H:VH,off:()=>+$('off').value||0,title:()=>(meta&&meta.name)||'Rovio'});
+initAlight({$,st,dl,curve,act,bg:()=>BGAPI?BGAPI.get():null,paintBg:(g,w,h,i,q)=>BGAPI?BGAPI.paint(g,w,h,i,q):false,bgOn:()=>!!$('bgOn')&&$('bgOn').checked,K:()=>K,S:()=>S,D:()=>D,fps:()=>fps,n:()=>frames.length,W:VW,H:VH,off:()=>+$('off').value||0,title:()=>(meta&&meta.name)||'KineExtract'});
