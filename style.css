@@ -276,127 +276,54 @@ aside label,#amRl label,small{overflow-wrap:anywhere}
 
 
 /* =====================================================================
-   Motion and life: entrances, hover, ambient glow, toasts
+   Motion: kept light. Short fades, soft hover colour, toasts.
    ===================================================================== */
-@keyframes kx-rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
-@keyframes kx-drop{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 @keyframes kx-fade{from{opacity:0}to{opacity:1}}
-@keyframes kx-in-l{from{opacity:0;transform:translateX(-22px)}to{opacity:1;transform:none}}
-@keyframes kx-in-r{from{opacity:0;transform:translateX(22px)}to{opacity:1;transform:none}}
-@keyframes kx-down{from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:none}}
-@keyframes kx-pop{from{opacity:0;transform:translateY(10px) scale(.94)}to{opacity:1;transform:none}}
-@keyframes kx-shimmer{to{background-position:200% 0}}
-@keyframes kx-float{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(34px,-16px) scale(1.1)}}
-@keyframes kx-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
-@keyframes kx-pulse{0%{box-shadow:0 0 0 0 rgba(16,236,192,.5)}70%{box-shadow:0 0 0 16px rgba(16,236,192,0)}100%{box-shadow:0 0 0 0 rgba(16,236,192,0)}}
-@keyframes kx-glow{0%,100%{filter:drop-shadow(0 0 0 rgba(16,236,192,0))}50%{filter:drop-shadow(0 0 10px rgba(16,236,192,.38))}}
-@keyframes kx-bump{40%{transform:scale(1.22);color:var(--mag-hi)}}
-@keyframes kx-rip{from{transform:scale(0);opacity:.4}to{transform:scale(1);opacity:0}}
-@keyframes kx-line{0%{transform:scaleX(0);opacity:1}70%{transform:scaleX(1);opacity:1}100%{transform:scaleX(1);opacity:0}}
-@keyframes kx-toast-in{from{opacity:0;transform:translateY(14px) scale(.96)}to{opacity:1;transform:none}}
-@keyframes kx-tick{from{opacity:.35}to{opacity:1}}
-@keyframes kx-ring{from{inset:-3px;opacity:.9}to{inset:-16px;opacity:0}}
-@keyframes kx-navin{from{opacity:0;transform:translateX(-10px) scale(.96)}to{opacity:1;transform:none}}
+@keyframes kx-pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes kx-toast-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes kx-ring{from{inset:-3px;opacity:.8}to{inset:-12px;opacity:0}}
 
-/* pages: fade in, then stagger the blocks */
-.view.pg.on{animation:kx-fade .35s ease backwards}
-#v-home.on :is(.hero,.dual,.pgfoot){animation:kx-rise .6s cubic-bezier(.2,.8,.2,1) backwards}
-#v-home.on .dual{animation-delay:.2s}#v-home.on .pgfoot{animation-delay:.32s}
-#v-home .stats .sc{animation:kx-pop .55s cubic-bezier(.2,.8,.2,1) backwards}
-#v-home .stats .sc:nth-child(1){animation-delay:.1s}#v-home .stats .sc:nth-child(2){animation-delay:.18s}
-.view.pg:not(#v-home).on .pgwrap>div:first-child>*:not(.pj-grid){animation:kx-rise .5s cubic-bezier(.2,.8,.2,1) backwards;animation-delay:calc(var(--n,0)*70ms)}
-.view.pg:not(#v-home) .pgwrap>div:first-child>:nth-child(2){--n:1}
-.view.pg:not(#v-home) .pgwrap>div:first-child>:nth-child(3){--n:2}
-.view.pg:not(#v-home) .pgwrap>div:first-child>:nth-child(4){--n:3}
-.view.pg:not(#v-home) .pgwrap>div:first-child>:nth-child(5){--n:4}
-.view.pg:not(#v-home) .pgwrap>div:first-child>:nth-child(n+6){--n:5}
-.pj{animation:kx-pop .35s cubic-bezier(.2,.8,.2,1) backwards;animation-delay:calc(var(--i,0)*45ms)}
-.pj-grid.quiet .pj{animation:none}
-.empty{animation:kx-fade .6s ease backwards}
+/* pages and the editor simply fade in */
+.view.pg.on,#v-tools.on{animation:kx-fade .2s ease backwards}
+.pj,.empty{animation:kx-fade .25s ease backwards}
 
-/* editor: panels glide in when the workspace opens */
-#v-tools.on header{animation:kx-down .4s cubic-bezier(.2,.8,.2,1) backwards}
-#v-tools.on #lt{animation:kx-in-l .45s cubic-bezier(.2,.8,.2,1) .05s backwards}
-#v-tools.on #rt{animation:kx-in-r .45s cubic-bezier(.2,.8,.2,1) .1s backwards}
-#v-tools.on #mid{animation:kx-fade .5s ease .1s backwards}
-#v-tools.on footer{animation:kx-rise .45s cubic-bezier(.2,.8,.2,1) .15s backwards}
-.tab:not([hidden]){animation:kx-drop .28s ease backwards}
-details[open]>:not(summary){animation:kx-drop .28s ease backwards}
-summary{transition:color .2s,padding-left .2s}summary:hover{padding-left:4px;color:#fff}
-.side .nv[data-go="tools"]:not([hidden]){animation:kx-navin .45s cubic-bezier(.2,.9,.3,1.2) backwards}
-
-/* hero: slow drifting glow and a moving shine on the title */
-.hero{position:relative;overflow:hidden;isolation:isolate}
-.hero::before,.hero::after{content:"";position:absolute;z-index:-1;border-radius:50%;filter:blur(70px);opacity:.32;pointer-events:none;will-change:transform}
-.hero::before{width:340px;height:340px;right:-70px;top:-130px;background:var(--c1);animation:kx-float 14s ease-in-out infinite}
-.hero::after{width:290px;height:290px;right:220px;bottom:-150px;background:var(--c2);animation:kx-float 19s ease-in-out infinite reverse}
-.hero-t h2{background-image:linear-gradient(100deg,#fff,var(--c1),var(--c2),var(--c1),#fff);background-size:200% 100%;background-repeat:repeat-x;animation:kx-shimmer 9s linear infinite}
-.logo img{transition:transform .3s}.logo:hover img{transform:scale(1.04)}
-.logo img{animation:kx-glow 6s ease-in-out infinite}
-.sc>svg.ic{animation:kx-bob 4.5s ease-in-out infinite}.sc:nth-child(2)>svg.ic{animation-delay:-2s}
-#stP.bump,#stP{display:block;transform-origin:left center}
-#stP.bump{animation:kx-bump .5s ease}
-
-/* cards: lift, border glow and a soft light that follows the cursor */
-.sc,.pn,.pj,.box{transition:transform .25s cubic-bezier(.2,.8,.2,1),border-color .25s,box-shadow .25s}
-.box{position:relative}
-.sc::after,.pn::after,.pj::after,.box::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .3s;background:radial-gradient(280px circle at var(--mx,50%) var(--my,50%),rgba(16,236,192,.11),transparent 65%)}
-.sc:hover::after,.pn:hover::after,.pj:hover::after,.box:hover::after{opacity:1}
-.sc:hover,.pn:hover,.pj:hover{transform:translateY(-3px);border-color:#10ecc055;box-shadow:0 16px 36px -20px rgba(16,236,192,.4)}
-.box:hover{border-color:#10ecc040}
-.sc:hover>svg.ic{animation-duration:1.6s}
-
-/* buttons */
-button,.btn{transition:border-color .15s,box-shadow .2s,transform .15s,background-color .2s,filter .2s,color .2s}
-button:not(:disabled):active,.btn:active{transform:scale(.97)}
-.bigbtn,button.go,.pj .acts button.open,.side .nv,.tour-actions button{position:relative;overflow:hidden}
-.bigbtn{transition:transform .2s,box-shadow .25s,filter .2s}
-.bigbtn:hover{transform:translateY(-2px);box-shadow:0 12px 28px -12px rgba(16,236,192,.6)}
-.bigbtn::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.38) 50%,transparent 70%);transform:translateX(-120%)}
-.bigbtn:hover::after{transition:transform .75s;transform:translateX(120%)}
-#qsNew{animation:kx-pulse 2.8s ease-out infinite}
-#qsNew:hover{animation:none}
-.bigbtn svg.ic{transition:transform .3s}.bigbtn:hover svg.ic{transform:rotate(90deg)}
-.side .nv{transition:background .25s,color .25s,transform .2s}
-.side .nv:hover{transform:translateX(3px)}
-.side .nv.on:hover{transform:none}
-.side .nv svg.ic{transition:transform .3s cubic-bezier(.2,.9,.3,1.4)}.side .nv:hover svg.ic{transform:scale(1.15) rotate(-6deg)}
-.kx-rip{position:absolute;border-radius:50%;background:rgba(255,255,255,.35);transform:scale(0);animation:kx-rip .6s ease-out forwards;pointer-events:none}
-.grp:has(#cancel:not(:disabled)) #analyze{animation:kx-pulse 1.6s ease-out infinite}
-#status.tick{animation:kx-tick .5s ease}
+/* hover: colour only, no movement */
+.sc,.pn,.pj,.box{transition:border-color .2s}
+.sc:hover,.pn:hover,.pj:hover,.box:hover{border-color:#10ecc044}
+button,.btn{transition:border-color .15s,background-color .2s,filter .2s,color .2s}
+.bigbtn{transition:filter .2s}
+.side .nv{transition:background .2s,color .2s}
+.search{transition:border-color .2s}
 :is(select,input[type=number],input[type=text],input[type=url],input[type=password]):focus-visible{box-shadow:0 0 0 3px #10ecc022}
-.search{transition:border-color .2s,box-shadow .25s}.search:focus-within{box-shadow:0 0 0 3px #10ecc022}
-.pj .acts button{transition:transform .15s,border-color .15s,filter .2s}
+.search:focus-within{box-shadow:0 0 0 3px #10ecc022}
 
-/* toasts and the page-change line */
+/* toasts */
 #kxToasts{position:fixed;right:20px;bottom:20px;z-index:110;display:flex;flex-direction:column;align-items:flex-end;gap:8px;pointer-events:none}
-.kx-toast{display:flex;align-items:center;gap:10px;max-width:min(340px,calc(100vw - 32px));padding:10px 16px;border:1px solid #10ecc044;border-radius:12px;background:#10141af2;color:var(--tx);font:500 13px var(--ui);box-shadow:0 14px 34px -14px #000;animation:kx-toast-in .35s cubic-bezier(.2,.9,.3,1.2)}
-.kx-toast::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--mag);box-shadow:0 0 10px var(--mag)}
-.kx-toast.out{opacity:0;transform:translateY(8px);transition:opacity .3s,transform .3s}
+.kx-toast{display:flex;align-items:center;gap:10px;max-width:min(340px,calc(100vw - 32px));padding:10px 16px;border:1px solid #10ecc044;border-radius:12px;background:#10141af2;color:var(--tx);font:500 13px var(--ui);box-shadow:0 14px 34px -14px #000;animation:kx-toast-in .25s ease}
+.kx-toast::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--mag)}
+.kx-toast.out{opacity:0;transition:opacity .3s}
 body.touring #kxToasts{display:none}
-#kxLine{position:fixed;left:0;top:0;height:2px;width:100%;z-index:115;background:var(--grad);transform-origin:left;transform:scaleX(0);opacity:0;pointer-events:none}
-#kxLine.go{animation:kx-line .7s ease-out}
 
 /* =====================================================================
    Guided tour
    ===================================================================== */
 .tour-btn{display:inline-flex;align-items:center;gap:8px;height:42px;padding:0 16px;border-radius:12px;font:600 14px var(--ui);color:var(--tx)}
 .tour-btn svg.ic{width:18px;height:18px;color:var(--mag)}
-.tour-btn.hint{border-color:var(--mag);animation:kx-pulse 2.4s ease-out infinite}
+.tour-btn.hint{border-color:var(--mag)}
 #tour{position:fixed;inset:0;z-index:120;transition:background .35s,opacity .24s}
 #tour[hidden]{display:none}
 #tour.closing{opacity:0}
 #tour.center{background:rgba(3,6,9,.78);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
 .tour-hole{position:fixed;left:0;top:0;width:0;height:0;border-radius:14px;box-shadow:0 0 0 9999px rgba(3,6,9,.76);outline:2px solid var(--mag);pointer-events:none;transition:opacity .3s}
 #tour.center .tour-hole{opacity:0}
-.tour-hole::after{content:"";position:absolute;inset:-3px;border-radius:inherit;border:2px solid var(--mag);animation:kx-ring 1.8s ease-out infinite}
+.tour-hole::after{content:"";position:absolute;inset:-3px;border-radius:inherit;border:2px solid var(--mag);animation:kx-ring 2.4s ease-out 3}
 .tour-card{position:fixed;left:0;top:0;width:min(380px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow:auto;padding:20px 20px 16px;border:1px solid #10ecc044;border-radius:18px;background:#10141a;color:var(--tx);font:14px/1.5 var(--ui);box-shadow:0 26px 60px -20px #000,0 0 40px -18px rgba(16,236,192,.45)}
-.tour-card.swap{animation:kx-pop .35s cubic-bezier(.2,.9,.3,1.2)}
+.tour-card.swap{animation:kx-pop .22s ease}
 .tour-card h3{margin:0 0 6px;font:700 19px/1.25 var(--head)}
 .tour-card p{margin:0;color:#b4bfcb}
 .tour-step{margin-bottom:6px;font:600 11px var(--ui);letter-spacing:.14em;text-transform:uppercase;color:var(--mag)}
 .tour-bar{height:3px;margin:14px 0 12px;border-radius:2px;background:#ffffff14;overflow:hidden}
-.tour-bar i{display:block;height:100%;background:var(--grad);transition:width .4s ease}
+.tour-bar i{display:block;height:100%;background:var(--grad);transition:width .3s ease}
 .tour-actions{display:flex;gap:8px;align-items:center}
 .tour-actions button{min-height:36px;padding:7px 16px}
 .tour-actions button[hidden]{display:none}
@@ -406,7 +333,7 @@ body.touring #kxToasts{display:none}
 .tour-card.welcome h3{font-size:24px}
 .tour-card.welcome .tour-actions{justify-content:center}
 .tour-card.welcome .tour-skip{margin-right:0;order:-1}
-.tour-spark{display:grid;place-items:center;width:56px;height:56px;margin:0 auto 14px;border-radius:50%;background:var(--grad);color:var(--ong);animation:kx-pulse 2.2s ease-out infinite}
+.tour-spark{display:grid;place-items:center;width:56px;height:56px;margin:0 auto 14px;border-radius:50%;background:var(--grad);color:var(--ong)}
 .tour-spark[hidden]{display:none}
 .tour-spark svg.ic{width:28px;height:28px}
 @media(max-width:700px){
