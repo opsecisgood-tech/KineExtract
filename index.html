@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>KineExtract · Video to animation</title><meta name="description" content="KineExtract turns video into animation. Processed locally in your browser."><meta name="theme-color" content="#080a0e"><link rel="icon" type="image/png" href="favicon.png"><link rel="icon" href="favicon.ico" sizes="any"><link rel="apple-touch-icon" href="apple-touch-icon.png"><link rel="manifest" href="site.webmanifest"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600;700&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css?v=10"></head>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>KineExtract · Video to animation</title><meta name="description" content="KineExtract turns video into animation. Processed locally in your browser."><meta name="theme-color" content="#080a0e"><link rel="icon" type="image/png" href="favicon.png"><link rel="icon" href="favicon.ico" sizes="any"><link rel="apple-touch-icon" href="apple-touch-icon.png"><link rel="manifest" href="site.webmanifest"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600;700&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css?v=11"></head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
 <symbol id="i-home" viewBox="0 0 24 24"><path d="M12 2.8 2.6 11.2a.8.8 0 0 0 .5 1.4H5V20a1.2 1.2 0 0 0 1.2 1.2H9.6v-6h4.8v6h3.4A1.2 1.2 0 0 0 19 20v-7.4h1.9a.8.8 0 0 0 .5-1.4z"/></symbol>
@@ -20,6 +20,7 @@
 <div class="topbar">
 <label class="search"><svg class="ic"><use href="#i-search"/></svg><input id="rvq" type="text" placeholder="Search projects…" autocomplete="off" aria-label="Search projects"></label>
 <span class="sp"></span>
+<button id="tourBtn" class="tour-btn" type="button" aria-label="Take the guided tour" title="Take the guided tour"><svg class="ic"><use href="#i-help"/></svg><span>Tour</span></button>
 </div>
 <div class="views">
 <div class="view pg on" id="v-home"><div class="pgwrap">
@@ -171,6 +172,7 @@
 </div>
 <div class="view pg" id="v-settings"><div class="pgwrap"><div>
 <h1 class="pt">Settings</h1><p class="pd">Tracking, smoothing and export options appear in the Tools workspace when you start or open a project. This page manages what KineExtract keeps on your device.</p>
+<div class="box"><h3>Get started tutorial</h3><p>A short, skippable walkthrough of the dashboard and the editor. It never changes your projects.</p><div class="row"><button id="stTour">Start the tour</button></div></div>
 <div class="box"><h3>Downloaded models</h3><p>The person-tracking models download once (about 350 MB) and stay cached so later analyses start instantly.</p><p id="stStore" class="m">Checking storage…</p><div class="row"><button id="stClear">Clear downloaded models</button></div><span class="msg" id="stMsg"></span></div>
 <div class="box"><h3>Recent activity</h3><p>Clears the Recent Activity card. Saved sessions are not deleted.</p><div class="row"><button id="stReset">Clear recent activity</button></div></div>
 </div><div class="grow"></div><div class="pgfoot"><span>© 2026 KineExtract. All rights reserved.</span></div></div></div>
@@ -210,4 +212,4 @@
 </div>
 <div class="agh"><label class="amok"><input id="amROk" type="checkbox"> I checked the preview and it looks right (manual check)</label><button id="amRDl" class="go" disabled>Download .xml</button><button id="amRSh" disabled>Share file…</button></div>
 </div>
-<script type="module" src="app.js?v=15"></script><script type="module" src="kineextract.js?v=5"></script></body></html>
+<script type="module" src="app.js?v=15"></script><script type="module" src="kineextract.js?v=6"></script><script type="module" src="fx.js?v=1"></script><script type="module" src="tour.js?v=1"></script></body></html>
