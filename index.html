@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KineExtract · Video to animation</title><meta name="description" content="KineExtract turns video into animation. Processed locally in your browser."><meta name="theme-color" content="#080a0e"><link rel="icon" type="image/png" href="favicon.png"><link rel="icon" href="favicon.ico" sizes="any"><link rel="apple-touch-icon" href="apple-touch-icon.png"><link rel="manifest" href="site.webmanifest"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600;700&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css?v=8"></head>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KineExtract · Video to animation</title><meta name="description" content="KineExtract turns video into animation. Processed locally in your browser."><meta name="theme-color" content="#080a0e"><link rel="icon" type="image/png" href="favicon.png"><link rel="icon" href="favicon.ico" sizes="any"><link rel="apple-touch-icon" href="apple-touch-icon.png"><link rel="manifest" href="site.webmanifest"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Outfit:wght@400;500;600;700&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css?v=9"></head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
 <symbol id="i-home" viewBox="0 0 24 24"><path d="M12 2.8 2.6 11.2a.8.8 0 0 0 .5 1.4H5V20a1.2 1.2 0 0 0 1.2 1.2H9.6v-6h4.8v6h3.4A1.2 1.2 0 0 0 19 20v-7.4h1.9a.8.8 0 0 0 .5-1.4z"/></symbol>
@@ -42,7 +42,7 @@
 <div class="view" id="v-tools">
 <header>
 <button id="tlBack" class="tl-back" aria-label="Back" title="Back"><svg class="ic"><use href="#i-back"/></svg></button>
-<div class="brand"><div><b>KineExtract Tools</b><small>Video to animation</small></div></div>
+<div class="brand"><img src="logo-mark.png" alt="" height="30"><div><b>KineExtract Tools</b><small>Video to animation</small></div></div>
 <div class="grp"><label class="btn">Upload video<input id="file" type="file" accept="video/*" hidden></label><button id="analyze" class="go">Analyze</button><button id="cancel" disabled>Cancel</button></div>
 <div class="stat"><span id="status">Loading model…</span><progress id="prog" value="0" max="1"></progress><small class="r">Processed locally in your browser. Nothing is uploaded.</small></div>
 </header>
@@ -58,11 +58,11 @@
 <small>Careful and Exhaustive are several times slower on purpose. Two independent passes must agree; if they don't, tie-breaker passes run, then suspicious frames are re-measured after the sweep.</small>
 <label><input id="held" type="checkbox"> Reuse repeated frames (animation drawn on twos / threes)</label>
 <label><input id="cam" type="checkbox" checked> Camera-shake compensation (keeps the lock through fast, shaky camera moves)</label>
-<small>Measures how the whole picture jumps between frames, then looks for the person where they should be after that jump. The person detector runs every frame while the camera is moving fast. The lasso and focus point never move on their own. Turn off for a tripod shot to save a little time.</small></details>
+<small>Measures how the whole picture jumps between frames, then looks for the person where they should be after that jump. The person detector runs every frame while the camera is moving fast. The target area and focus point never move on their own. Turn off for a tripod shot to save a little time.</small></details>
 <details open><summary>Human tracker engine</summary>
 <label>Model<select id="mdl"><option value="lite">Lite (fast)</option><option value="full">Full</option><option value="heavy" selected>Heavy (most accurate)</option></select></label>
 <label>Tracker engine<select id="eng"><option value="dw" selected>DWPose / RTMW: 133-point whole-body (advanced)</option><option value="mp">MediaPipe Pose (legacy, 33 points)</option></select></label>
-<label>Person detector (advanced engine)<select id="ddet"><option value="yolox" selected>YOLOX-L (217 MB download, best)</option><option value="none">None: follow pose + lasso only</option></select></label>
+<label>Person detector (advanced engine)<select id="ddet"><option value="yolox" selected>YOLOX-L (217 MB download, best)</option><option value="none">None: follow pose + target area only</option></select></label>
 <small>The advanced engine runs fully in your browser (WebGPU, falls back to CPU). Models download once, about 350 MB, then stay cached. The model/confidence boxes below only apply to MediaPipe.</small>
 <label>Poses to consider<input id="np" type="number" min="1" max="6" value="4"></label>
 <label>Detection conf<input id="cd" type="number" step=".05" min="0" max="1" value=".35"></label>
@@ -87,10 +87,10 @@
 <details open><summary>Who to track</summary>
 <small>Use <b>Pick subject</b> above the video on the first frame: everyone found is numbered, click one. Their clothing colours are memorised and tracking stays on them even when people overlap. Drag the circle to nudge it. With no pick, the largest, clearest person is used.</small>
 <label><input id="lock" type="checkbox" checked> Identity lock (clothing colour + motion + size keep the chosen person when others stand close)</label></details>
-<details open><summary>Focus lasso</summary>
-<label><input id="lmask" type="checkbox"> Ignore everything outside the lasso</label>
+<details open><summary>Target area</summary>
+<label><input id="lmask" type="checkbox"> Ignore everything outside the drawn area</label>
 <label>Focus padding %<input id="fpad" type="number" min="0" max="200" value="35"></label>
-<small>Go to the first frame, press Lasso above the video, then drag a loop around the spot to track. Tracking zooms in around the lasso center and prefers the person inside it. The lasso and the subject circle stay put until you drag their center handle somewhere else.</small></details>
+<small>Go to the first frame, press <b>Draw</b> above the video and paint over the spot to track. <b>Erase</b> rubs parts out and the Brush slider sets the size. Tracking zooms in around the painted area and prefers the person inside it. The area and the subject circle stay put until you drag the crosshair somewhere else. Press Draw or Erase again to switch the tool off.</small></details>
 <details open><summary>Body parts</summary><small>Untick a part to remove it from tracking, graphs and exports. Press Analyze again to re-track without it.</small><div id="pchips"><button data-p="all">Full body</button><button data-p="upper">Upper body</button><button data-p="lower">Lower body</button><button data-p="left">Left side</button><button data-p="right">Right side</button></div><select id="rig"><option value="1">Simple</option><option value="2" selected>Standard</option><option value="3">Detailed</option></select><div id="parts"></div></details>
 </div>
 
@@ -148,7 +148,7 @@
 </aside>
 <section id="mid">
 <div class="row ctl vtools"><b>Subject</b><button id="pick" class="go">Pick subject</button><button id="pclear">Clear</button>
-<button id="lasso">Lasso</button><button id="lclear">Clear lasso</button></div>
+<span class="vsep"></span><b>Target</b><button id="draw">Draw</button><button id="erase">Erase</button><label class="brush">Brush<input id="brush" type="range" min="1" max="20" step="1" value="5" aria-label="Brush size"></label><button id="fclear">Clear area</button></div>
 <div id="wrapv"><div id="stage"><video id="v" playsinline muted></video><canvas id="ov"></canvas></div><div id="pvw" hidden><canvas id="pv" width="480" height="270"></canvas></div></div>
 <div class="row ctl"><button id="back">◀|</button><button id="play">Play</button><button id="fwd">|▶</button>
 <select id="spd"><option>0.25</option><option>0.5</option><option>0.75</option><option selected>1</option><option>1.5</option><option>2</option></select>
@@ -210,4 +210,4 @@
 </div>
 <div class="agh"><label class="amok"><input id="amROk" type="checkbox"> I checked the preview and it looks right (manual check)</label><button id="amRDl" class="go" disabled>Download .xml</button><button id="amRSh" disabled>Share file…</button></div>
 </div>
-<script type="module" src="app.js?v=13"></script><script type="module" src="kineextract.js?v=5"></script></body></html>
+<script type="module" src="app.js?v=14"></script><script type="module" src="kineextract.js?v=5"></script></body></html>
