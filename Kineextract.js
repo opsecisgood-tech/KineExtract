@@ -1,4 +1,4 @@
-// Rovio shell: page navigation, dashboard cards, project list.
+// KineExtract shell: page navigation, dashboard cards, project list.
 // The editor itself (app.js / alight.js) is untouched by this file; it only clicks its buttons.
 const $ = id => document.getElementById(id);
 const store = {
@@ -54,16 +54,16 @@ document.addEventListener('click', e => {
 // Edits are saved as "Unnamed project N" (N = next free number). While the same project stays open, later autosaves update that same entry.
 let autoName = null;
 async function leaveProject() {
-  if (!active || !window.rovioProject) return null;
-  const n = await window.rovioProject.autosave(autoName);
+  if (!active || !window.kineextractProject) return null;
+  const n = await window.kineextractProject.autosave(autoName);
   if (n) { autoName = n; note('Autosaved ' + n); }
   return n;
 }
 // closing or reloading the tab: best effort (the browser may cut the save short)
-addEventListener('pagehide', () => { if (active && window.rovioProject) window.rovioProject.autosave(autoName); });
+addEventListener('pagehide', () => { if (active && window.kineextractProject) window.kineextractProject.autosave(autoName); });
 
 /* ---------- recent activity ---------- */
-function note(label) { store.set('rovio.recent', { label, t: Date.now() }); refreshStats(); }
+function note(label) { store.set('kineextract.recent', { label, t: Date.now() }); refreshStats(); }
 function ago(t) {
   const s = Math.max(0, (Date.now() - t) / 1000);
   if (s < 60) return 'just now';
@@ -88,7 +88,7 @@ const sess = $('sess');
 const names = () => [...sess.options].map(o => o.value || o.text).filter(Boolean);
 function refreshStats() {
   $('stP').textContent = names().length;
-  const r = store.get('rovio.recent', null);
+  const r = store.get('kineextract.recent', null);
   $('stA').textContent = r ? r.label : 'None';
   $('stAt').textContent = r ? ago(r.t) : '';
 }
@@ -167,7 +167,7 @@ $('stClear').onclick = async () => {
   try { await caches.delete('vid2anim-models'); $('stMsg').textContent = 'Models cleared.'; } catch { $('stMsg').textContent = 'Could not clear the cache in this browser.'; }
   refreshStorage();
 };
-$('stReset').onclick = () => { store.del('rovio.recent'); refreshStats(); if (current === 'projects') renderProjects(); };
+$('stReset').onclick = () => { store.del('kineextract.recent'); refreshStats(); if (current === 'projects') renderProjects(); };
 
 setActive(false);
 route();
