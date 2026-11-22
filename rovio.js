@@ -34,7 +34,9 @@ function show(page) {
 function route() {
   const h = decodeURIComponent(location.hash.slice(1));
   if (h === 'tools' && !active) { history.replaceState(null, '', '#home'); return show('home'); }
-  show(PAGES.includes(h) ? h : 'home');
+  const next = PAGES.includes(h) ? h : 'home';
+  if (current === 'tools' && next !== 'tools') leaveProject();   // leaving Tools with edits: keep them as an autosaved project
+  show(next);
 }
 const go = page => { if (location.hash === '#' + page) route(); else location.hash = page; };
 window.addEventListener('hashchange', route);
@@ -42,6 +44,18 @@ document.addEventListener('click', e => {
   const t = e.target.closest('[data-go]');
   if (t) { e.preventDefault(); go(t.dataset.go); }
 });
+
+/* ---------- autosave when leaving a project with edits ---------- */
+// Edits are saved as "Unnamed project N" (N = next free number). While the same project stays open, later autosaves update that same entry.
+let autoName = null;
+async function leaveProject() {
+  if (!active || !window.rovioProject) return null;
+  const n = await window.rovioProject.autosave(autoName);
+  if (n) { autoName = n; note('Autosaved ' + n); }
+  return n;
+}
+// closing or reloading the tab: best effort (the browser may cut the save short)
+addEventListener('pagehide', () => { if (active && window.rovioProject) window.rovioProject.autosave(autoName); });
 
 /* ---------- recent activity ---------- */
 function note(label) { store.set('rovio.recent', { label, t: Date.now() }); refreshStats(); }
@@ -96,22 +110,24 @@ function renderProjects() {
     acts.append(o, d); c.append(top, acts); grid.append(c);
   }
 }
-$('pjGrid').addEventListener('click', e => {
+$('pjGrid').addEventListener('click', async e => {
   const b = e.target.closest('button[data-a]'); if (!b) return;
   const n = b.closest('.pj').dataset.n;
-  sess.value = n;
   if (b.dataset.a === 'open') {
-    if (active && hasVideo() && !confirm('Open this project? Unsaved changes to the current project will be lost.')) return;
+    await leaveProject();             // the project being replaced is autosaved if it has edits
+    sess.value = n;
+    autoName = /^Unnamed project \d+$/.test(n) ? n : null;   // editing an autosaved project updates it instead of making a copy
     $('open').click(); setActive(true); go('tools');
   }
-  else $('del').click();              // the editor asks for confirmation itself
+  else { sess.value = n; $('del').click(); }   // the editor asks for confirmation itself
 });
 new MutationObserver(() => { refreshStats(); if (current === 'projects') renderProjects(); }).observe(sess, { childList: true });
 
 /* ---------- new project / save ---------- */
 const hasVideo = () => { const v = $('v'); return !!(v && v.currentSrc); };
-function newProject() {
-  if (active && hasVideo() && !confirm('Start a new project? Unsaved analysis will be cleared.')) return;
+async function newProject() {
+  await leaveProject();                // the project being replaced is autosaved if it has edits
+  autoName = null;
   if (hasVideo()) $('newS').click();   // always start from a clean editor
   setActive(true);
   note('New project');
