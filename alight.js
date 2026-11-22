@@ -17,7 +17,7 @@
 // in the app although our own preview (same geometry model) looked right. Drawn size = 2 × size × scale; default size 100
 // (AM's own default), so even a dropped property gives the same result.
 
-import {gridFor,tileSeries} from './bg.js?v=1';
+import {gridFor,tileSeries} from './bg.js?v=2';
 
 /* ───────── rebuilt background ─────────
    The AI background capture (bg.js) gives a few colour plates over time. Here every plate becomes a grid of plain rectangle layers
@@ -34,11 +34,11 @@ function pruneKeys(k,tol=3){ // drop colour keys that the neighbouring keys alre
   return o.length===2&&same(o[0].v,o[1].v)?[o[0]]:o;
 }
 function bgLayers(M,o,bg,T,sdiv){
-  const{cw,ch}=M,{cols,rows}=gridFor(o.bgQ,bg.W,bg.H),ser=tileSeries(bg,cols,rows),anim=o.bgAnim!=='fixed'&&ser.length>1,
+  const{cw,ch}=M,{cols,rows}=gridFor(o.bgQ,bg.W,bg.H,bg.pw),ser=tileSeries(bg,cols,rows),anim=o.bgAnim!=='fixed'&&ser.length>1,
     sc=`<scale value="${f6((cw/cols+2)/sdiv)},${f6((ch/rows+2)/sdiv)}"/>`,out=[]; // each part is 2 px bigger than its cell so no seams show
   for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
     const t=r*cols+c;let keys=ser.map(s=>({i:s.i,v:[s.rgb[3*t],s.rgb[3*t+1],s.rgb[3*t+2]]}));
-    keys=pruneKeys(anim?keys:[keys[0]]);
+    keys=pruneKeys(anim?keys:[keys[0]],cols*rows>4000?5:3);
     const loc=`<location value="${f6((c+.5)*cw/cols)},${f6((r+.5)*ch/rows)},0.000000"/>`;
     const fill=keys.length<2?`<fillColor value="${hexC(keys[0].v)}"/>`:`<fillColor>\n        ${keys.map(k=>`<kf t="${T(k.i)}" v="${hexC(k.v)}"/>`).join('\n        ')}\n      </fillColor>`;
     out.push({pid:undefined,role:'bg',label:`BG ${r+1}-${c+1}`,sid:'.rect',color:hexC(keys[0].v),fill,tf:[loc,sc]});
@@ -544,8 +544,8 @@ export function initAlight(c){
     const on=c.bgOn&&c.bgOn(),bg=c.bg&&c.bg();
     if(!on){el.textContent='Background rebuild is off. Turn it on in Scan → Background rebuild and the export will include it.';return}
     if(!bg){el.textContent='Background rebuild is on, but nothing is captured yet. Analyze a video (it runs by itself) or press Capture background now.';return}
-    const q=get('amBgQ')||'mid',g=gridFor(q,bg.W,bg.H);
-    el.textContent=`${g.cols} × ${g.rows} = ${g.parts} background parts · ${bg.mode==='moving'?'Moving':'Static'} · rebuilt every ${bg.every} frames (${bg.plates.length} captures).`+(g.parts>300?' This many layers can make Alight Motion slow on a phone.':'');
+    const q=get('amBgQ')||'mid',g=gridFor(q,bg.W,bg.H,bg.pw);
+    el.textContent=`${g.cols} × ${g.rows} = ${g.parts} background parts · ${bg.mode==='moving'?'Moving':'Static'} · rebuilt every ${bg.every} frames (${bg.plates.length} captures, ${bg.pw} px wide).`+(g.parts>4000?' Very heavy: this is close to 1:1 with the picture, but Alight Motion may be slow or fail to open it on a phone. Set Background colour animation to Fixed colours to keep the file smaller.':g.parts>300?' This many layers can make Alight Motion slow on a phone.':'')+(q==='photo'&&bg.pw<=128?' Tip: set Scan → Background rebuild → Detail to High or Photo and capture again for a sharper result.':'');
   };
   if($('amBgQ'))$('amBgQ').addEventListener('change',bgInfo);
   window.addEventListener('rovio-bg',bgInfo);bgInfo();
@@ -558,6 +558,7 @@ export function initAlight(c){
     cv.width=W;cv.height=H;const x=cv.getContext('2d');
     x.fillStyle='#0e0e10';x.fillRect(0,0,W,H);const bg=opts().bg,al=parseInt(bg.slice(1,3),16);
     x.fillStyle='#'+bg.slice(3);x.globalAlpha=al/255||0.0;x.fillRect(0,0,W,H);x.globalAlpha=1;
+    {const bd=c.bg&&c.bg(),showBg=!$('amRBgOn')||$('amRBgOn').checked;if(showBg&&c.paintBg&&opts().bgOn&&bd&&bd.plates&&bd.plates.length&&bd.n===c.n())c.paintBg(x,W,H,R.frame,opts().bgQ)} // the rebuilt background, exactly as the export will place it
     const hit=g.hitsAt(R.frame),lay=g.geomAt(R.frame);if(opts().order==='top')lay.reverse();
     const col=s=>{const a=parseInt(s.slice(1,3),16)/255,r=parseInt(s.slice(3,5),16),gg=parseInt(s.slice(5,7),16),b=parseInt(s.slice(7,9),16);return`rgba(${r},${gg},${b},${a})`};
     const sel=part();
@@ -605,11 +606,23 @@ export function initAlight(c){
   };
   const later=()=>{clearTimeout(R.timer);$('amROk').checked=false;sync();R.timer=setTimeout(()=>refresh(true),180)};
   const openRev=act=>{R.act=act;$('amRev').hidden=false;document.body.style.overflow='hidden';refresh(false)};
-  const closeRev=()=>{if($('amRev'))$('amRev').hidden=true;document.body.style.overflow=''};
+  // ---- play the preview in real time (at the analysis fps), looping
+  const stopPlay=()=>{R.playing=false;cancelAnimationFrame(R.raf);if($('amRPlay'))$('amRPlay').textContent='▶ Play'};
+  const startPlay=()=>{
+    if(!R.r)return;const n=c.n(),fps=c.fps()||15;if(n<2)return;if(R.frame>=n-1)R.frame=0;
+    R.playing=true;$('amRPlay').textContent='❚❚ Pause';let t0=performance.now(),f0=R.frame;
+    const tick=now=>{if(!R.playing)return;let f=f0+Math.floor((now-t0)/1000*fps);if(f>=n){f0=0;t0=now;f=0}
+      if(f!==R.frame){R.frame=f;$('amRT').value=f;cvDraw()}R.raf=requestAnimationFrame(tick)};
+    R.raf=requestAnimationFrame(tick);
+  };
+  const closeRev=()=>{stopPlay();if($('amRev'))$('amRev').hidden=true;document.body.style.overflow=''};
   if(hasReview){
     $('amRX').onclick=closeRev;
-    $('amRT').oninput=()=>{R.frame=+$('amRT').value;cvDraw()};
-    $('amRWorst').onclick=()=>{const r=R.r;if(!r)return;const f=r.r2.worstFrame>=0?r.r2.worstFrame:r.r1.worstFrame;if(f>=0){R.frame=f;$('amRT').value=f;cvDraw()}};
+    $('amRT').oninput=()=>{stopPlay();R.frame=+$('amRT').value;cvDraw()};
+    if($('amRPlay'))$('amRPlay').onclick=()=>R.playing?stopPlay():startPlay();
+    if($('amRBgOn'))$('amRBgOn').onchange=cvDraw;
+    addEventListener('keydown',e=>{if(e.code==='Space'&&!$('amRev').hidden&&!/^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test((e.target.tagName||'')) ){e.preventDefault();R.playing?stopPlay():startPlay()}});
+    $('amRWorst').onclick=()=>{stopPlay();const r=R.r;if(!r)return;const f=r.r2.worstFrame>=0?r.r2.worstFrame:r.r1.worstFrame;if(f>=0){R.frame=f;$('amRT').value=f;cvDraw()}};
     $('amRAuto').onclick=()=>{adj.auto=!adj.auto;refresh(true)};
     $('amRMax').onchange=()=>{adj.max=Math.max(0,+$('amRMax').value||0);if(adj.auto)refresh(true)};
     $('amRPart').onchange=()=>{loadPart();cvDraw()};
