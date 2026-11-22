@@ -15,9 +15,9 @@ const WASM="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
 const MODEL="https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite";
 
 /* ───────── quality → number of parts ───────── */
-export const COLS={low:8,mid:16,high:32};
-export const QNAME={low:'Low',mid:'Mid',high:'High'};
-export function gridFor(q,w,h){const cols=COLS[q]||COLS.mid,rows=Math.max(1,Math.round(cols*h/Math.max(1,w)));return{cols,rows,parts:cols*rows}}
+export const COLS={low:8,mid:16,high:32,ultra:64,photo:0};   // photo = one part per captured pixel (columns = plate width)
+export const QNAME={low:'Low',mid:'Mid',high:'High',ultra:'Ultra',photo:'Photo'};
+export function gridFor(q,w,h,pw){const cols=q==='photo'?Math.max(8,pw||128):(COLS[q]||COLS.mid),rows=Math.max(1,Math.round(cols*h/Math.max(1,w)));return{cols,rows,parts:cols*rows}}
 
 /* ───────── tiles: plates averaged down to cols × rows colours ───────── */
 const tcache=new WeakMap();
@@ -116,8 +116,7 @@ export function initBG(c){
   const fire=()=>window.dispatchEvent(new Event('rovio-bg'));
   const say=t=>{if($('bgMsg'))$('bgMsg').textContent=t;st(t)};
   const mk=(w,h)=>{const e=document.createElement('canvas');e.width=w;e.height=h;return e};
-  const PW=128;
-
+  
   async function ensureModel(){
     if(seg||segFail)return seg;
     if(loading)return loading;
@@ -145,10 +144,10 @@ export function initBG(c){
     const t0=performance.now();
     try{
       await ensureModel();
-      const n=fr.length,fps=c.fps(),start=c.start(),W=c.W(),H=c.H(),mode=($('bgMode')&&$('bgMode').value)||'static',
-        every0=Math.max(1,Math.round(+($('bgEvery')&&$('bgEvery').value)||8)),every=Math.max(every0,Math.ceil(n/240));
+      const n=fr.length,fps=c.fps(),start=c.start(),W=c.W(),H=c.H(),mode=($('bgMode')&&$('bgMode').value)||'static',PWD=+($('bgDetail')&&$('bgDetail').value)||128,
+        every0=Math.max(1,Math.round(+($('bgEvery')&&$('bgEvery').value)||8)),every=Math.max(every0,Math.ceil(n/(PWD>128?60:240)));
       const idx=[];for(let i=0;i<n;i+=every)idx.push(i);if(idx[idx.length-1]!==n-1)idx.push(n-1);
-      const pw=PW,ph=Math.max(16,Math.round(PW*H/W)),fc=mk(480,Math.max(8,Math.round(480*H/W))),fg=fc.getContext('2d',{willReadFrequently:true}),
+      const pw=PWD,ph=Math.max(16,Math.round(PWD*H/W)),FW=Math.max(480,pw*2),fc=mk(FW,Math.max(8,Math.round(FW*H/W))),fg=fc.getContext('2d',{willReadFrequently:true}),
         pc=mk(pw,ph),pg=pc.getContext('2d',{willReadFrequently:true}),cc=mk(256,256),cg=cc.getContext('2d'),kc=mk(pw,ph),kg=kc.getContext('2d',{willReadFrequently:true});
       const S=[];let aiFrames=0,skipped=0;
       // pass 1: cut the person out of every captured frame
@@ -210,6 +209,7 @@ export function initBG(c){
   if($('bgClr'))$('bgClr').onclick=()=>{bg=null;say('Captured background cleared.');fire();c.redraw()};
   for(const i of['bgMode','bgEvery'])if($(i))$(i).onchange=()=>{if(bg)say('Settings changed. Press Capture background now to rebuild with them.')};
 
+  const pt={cv:null,g:null,id:null};
   return{
     capture,load:()=>ensureModel(),
     clear:()=>{if(bg){bg=null;fire()}},
@@ -217,7 +217,11 @@ export function initBG(c){
     set:o=>{bg=o&&o.plates&&o.plates.length?o:null;fire();c.redraw()},
     // draw the rebuilt background (as the grid of parts the Alight export will use) onto a canvas
     paint:(g,w,h,i,q)=>{
-      if(!bg)return false;const{cols,rows}=gridFor(q,bg.W,bg.H),t=tilesAt(tileSeries(bg,cols,rows),i);
+      if(!bg)return false;const{cols,rows}=gridFor(q,bg.W,bg.H,bg.pw),t=tilesAt(tileSeries(bg,cols,rows),i);
+      if(cols*rows>1500){ // many parts: one pixel per part, scaled up without smoothing (same blocks as the exported rectangles, much faster)
+        if(!pt.cv||pt.cv.width!==cols||pt.cv.height!==rows){pt.cv=mk(cols,rows);pt.g=pt.cv.getContext('2d');pt.id=pt.g.createImageData(cols,rows)}
+        const d=pt.id.data;for(let k=0;k<cols*rows;k++){d[4*k]=t[3*k];d[4*k+1]=t[3*k+1];d[4*k+2]=t[3*k+2];d[4*k+3]=255}
+        pt.g.putImageData(pt.id,0,0);const sm=g.imageSmoothingEnabled;g.imageSmoothingEnabled=false;g.drawImage(pt.cv,0,0,w,h);g.imageSmoothingEnabled=sm;return true}
       for(let r=0;r<rows;r++)for(let k=0;k<cols;k++){const o=3*(r*cols+k);g.fillStyle=`rgb(${t[o]},${t[o+1]},${t[o+2]})`;
         const x0=Math.floor(k*w/cols),y0=Math.floor(r*h/rows);g.fillRect(x0,y0,Math.floor((k+1)*w/cols)-x0+1,Math.floor((r+1)*h/rows)-y0+1)}
       return true;
