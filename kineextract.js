@@ -63,7 +63,7 @@ async function leaveProject() {
 addEventListener('pagehide', () => { if (active && window.kineextractProject) window.kineextractProject.autosave(autoName); });
 
 /* ---------- recent activity ---------- */
-function note(label) { store.set('kineextract.recent', { label, t: Date.now() }); refreshStats(); }
+function note(label) { store.set('kineextract.recent', { label, t: Date.now() }); refreshStats(); window.dispatchEvent(new CustomEvent('kx:toast', { detail: label })); }
 function ago(t) {
   const s = Math.max(0, (Date.now() - t) / 1000);
   if (s < 60) return 'just now';
@@ -168,6 +168,14 @@ $('stClear').onclick = async () => {
   refreshStorage();
 };
 $('stReset').onclick = () => { store.del('kineextract.recent'); refreshStats(); if (current === 'projects') renderProjects(); };
+
+// hooks used by tour.js (the guided tutorial): it can open the editor without asking for a video
+window.kineextractShell = {
+  go,
+  current: () => current,
+  isActive: () => active,
+  openTools() { if (!active) setActive(true); go('tools'); }
+};
 
 setActive(false);
 route();
