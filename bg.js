@@ -1,4 +1,4 @@
-// Rovio background rebuild.
+// KineExtract background rebuild.
 //
 //   1. For every Nth analysed frame (the "rebuild every" setting) the tracked person is cut out of the picture.
 //      The cut-out uses an AI person segmenter (MediaPipe selfie segmenter, run on a crop around the tracked person)
@@ -113,7 +113,7 @@ function toPlane(mk,crop,pw,ph,W,H,inv){
 export function initBG(c){
   const $=c.$,st=c.st,V=c.V;
   let seg=null,segFail=false,loading=null,bg=null,busy=false;
-  const fire=()=>window.dispatchEvent(new Event('rovio-bg'));
+  const fire=()=>window.dispatchEvent(new Event('kineextract-bg'));
   const say=t=>{if($('bgMsg'))$('bgMsg').textContent=t;st(t)};
   const mk=(w,h)=>{const e=document.createElement('canvas');e.width=w;e.height=h;return e};
   
